@@ -2,6 +2,9 @@ import astropy.units as u
 import scipy.interpolate as spint
 import astropy.constants as const
 import scipy.constants as spconst
+import numpy as np
+import get_data_info as gdi
+from astropy.coordinates import Angle #
 
 def get_sz_values():
     
@@ -34,3 +37,50 @@ def get_sz_values():
                    "m_e_c2":m_e_c2}
 
     return sz_cons_values, sz_cons_units
+
+def get_underlying_vars():
+
+    ### Some cluster-dependent variables:
+    rxj1347_priors = priors()
+    m500   = rxj1347_priors.M500 * u.M_sun
+    z      = rxj1347_priors.z
+    #racen  = rxj1347_priors.ra.to('deg')
+    #deccen = rxj1347_priors.dec.to('deg')
+    ### Some fitting variables:
+    beamvolume=120.0 # in arcsec^2
+    radminmax = np.array([9.0,4.25*60.0])*(u.arcsec).to('rad')
+    nbins     = 6    # It's just a good number...so good, you could call it a perfect number.
+
+    ##############
+    bins      = np.logspace(np.log10(radminmax[0]),np.log10(radminmax[1]), nbins) 
+    #geom     = [X_shift, Y_shift, Rotation, Ella*, Ellb*, Ellc*, Xi*, Opening Angle]
+    geom      = [0,0,0,1,1,1,0,0] # This gives spherical geometry
+    map_vars  = gdi.get_map_vars(rxj1347_priors, instrument='MUSTANG2')
+    alphas    = np.zeros(nbins) #??
+    d_ang     = gdi.get_d_ang(z)
+    #binskpc   = bins * d_ang
+    sz_vars,szcu = get_sz_values()
+    sz_vars   = gdi.get_SZ_vars(temp=rxj1347_priors.Tx)
+    Pdl2y     = (szcu['thom_cross']*d_ang/szcu['m_e_c2']).to("cm**3 keV**-1")
+
+    return sz_vars, map_vars, bins, Pdl2y, geom
+
+class priors:
+        
+    def __init__(self):
+        
+        ###############################################################################
+        ### Prior known values regarding the RXJ1053. Redshift, ra, and dec *MUST* be
+        ### known / accurate. M_500 and Tx are useful for creating initial guesses.
+        ### Tx is still important if relativistic corrections may be severe.
+        
+        self.z=0.4510                      # Redshift
+        self.ra = Angle('13h47m30.5s')     # Right Ascencion, in hours
+        self.dec= Angle('-11d45m9s')       # Declination, in degrees
+        self.M500 = 2.2e15                 # Solar masses
+        self.Tx    = 10.8                  # keV
+        self.name  = 'rxj1347'
+        
+        ###  For when the time comes to use the *actual* coordinates for Abell 2146,
+        ###  Here they are. Even now, it's useful to calculate the offsets of the centroids
+        ###  for the radius of curvature of the shocks.

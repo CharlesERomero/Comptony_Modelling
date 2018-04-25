@@ -5,47 +5,52 @@ import analytic_integrations as ai    # Well that could be misleading...
 import astropy.constants as const     # 
 from astropy.coordinates import Angle #
 import gNFW_profiles as gp            # Sure seems general purpose
+import yafc                           # 
 
+
+### I do want these to be global.
+sz_vars, map_vars, bins, Pdl2y, geom = yafc.get_underlying_vars()
+    
 def get_prof(ras,decs,pos,posind=0):
-
-    sz_vars, map_vars, bins, Pdl2y, geom = get_underlying_vars()
+  
     alphas    = pos*0.0
-    yProf, outalphas = Comptony_profile(pos,bins,sz_vars,map_vars,fit_cen,geom,alphas,
+    yProf, outalphas = Comptony_profile(pos,posind,bins,sz_vars,map_vars,geom,alphas,
                             fixalpha=False,fullSZcorr=False,SZtot=False,columnDen=False,Comptony=True,
-                            finite=False,oldvs=False)
-
-    radarr  = radec2rad(ras, decs, racen, deccen, geoparams=[0,0,0,1,1,1,0,0])
+                                        finite=False,oldvs=False,fit_cen=False)
+    radarr  = radec2rad(ras, decs, map_vars["racen"], map_vars["deccen"], geoparams=[0,0,0,1,1,1,0,0])
     radVals = (radarr.to('rad')).value
     yVals   = np.interp(radVals, map_vars['thetas'],yProf)
-    fit_cen = False  # Do not fit for a centroid. (If so, you need 2 more parameters in the variable pos)
 
+    plot_example(radVals,yVals, map_vars['thetas'], yProf)
 
-def get_underlying_vars():
-
-    ### Some cluster-dependent variables:
-    rxj1347_priors = priors()
-    m500   = rxj1347_priors.M500 * u.M_sun
-    z      = rxj1347_priors.z
+    return yVals
+    
+#def get_underlying_vars():
+#
+#    ### Some cluster-dependent variables:
+#    rxj1347_priors = priors()
+#    m500   = rxj1347_priors.M500 * u.M_sun
+#    z      = rxj1347_priors.z
     #racen  = rxj1347_priors.ra.to('deg')
     #deccen = rxj1347_priors.dec.to('deg')
     ### Some fitting variables:
-    beamvolume=120.0 # in arcsec^2
-    radminmax = np.array([9.0,4.25*60.0])*(u.arcsec).to('rad')
-    nbins     = 6    # It's just a good number...so good, you could call it a perfect number.
+#    beamvolume=120.0 # in arcsec^2
+#    radminmax = np.array([9.0,4.25*60.0])*(u.arcsec).to('rad')
+#    nbins     = 6    # It's just a good number...so good, you could call it a perfect number.
 
     ##############
-    bins      = np.logspace(np.log10(radminmax[0]),np.log10(radminmax[1]), nbins) 
+#    bins      = np.logspace(np.log10(radminmax[0]),np.log10(radminmax[1]), nbins) 
     #geom     = [X_shift, Y_shift, Rotation, Ella*, Ellb*, Ellc*, Xi*, Opening Angle]
-    geom      = [0,0,0,1,1,1,0,0] # This gives spherical geometry
-    map_vars  = gdi.get_map_vars(rxj1347_priors, instrument='MUSTANG2')
-    alphas    = np.zeros(nbins) #??
-    d_ang     = gdi.get_d_ang(z)
+#    geom      = [0,0,0,1,1,1,0,0] # This gives spherical geometry
+#    map_vars  = gdi.get_map_vars(rxj1347_priors, instrument='MUSTANG2')
+#    alphas    = np.zeros(nbins) #??
+#    d_ang     = gdi.get_d_ang(z)
     #binskpc   = bins * d_ang
-    sz_vars,szcu = gdi.get_sz_values()
-    sz_vars   = gdi.get_SZ_vars(temp=rxj1347_priors.Tx)
-    Pdl2y     = (szcu['thom_cross']*d_ang/szcu['m_e_c2']).to("cm**3 keV**-1")
-
-    return sz_vars, map_vars, bins, Pdl2y, geom
+#    sz_vars,szcu = gdi.get_sz_values()
+#    sz_vars   = gdi.get_SZ_vars(temp=rxj1347_priors.Tx)
+#    Pdl2y     = (szcu['thom_cross']*d_ang/szcu['m_e_c2']).to("cm**3 keV**-1")#
+#
+#    return sz_vars, map_vars, bins, Pdl2y, geom
     
 def example_profile():
     """
@@ -54,32 +59,41 @@ def example_profile():
     (2) get profile radii as an array, expressed in radians.
     (3) 
     """
-    sz_vars, map_vars, bins, Pdl2y, geom = get_underlying_vars()
+    #sz_vars, map_vars, bins, Pdl2y, geom = yafc.get_underlying_vars()
 
     rads      = bins * map_vars["d_ang"]
     a10pres   = gp.a10_from_m500_z(map_vars["m500"], map_vars["z"], rads)
     uless_p   = (a10pres*Pdl2y).decompose().value   # Unitless array
     alphas    = uless_p*0.0
     pos       = uless_p                             # These to be fed in via MCMC
-    #fit_cen = False  # Do not fit for a centroid. (If so, you need 2 more parameters in the variable pos)
     posind    = 0
-    
-    yProf, outalphas = Comptony_profile(pos,posind,bins,sz_vars,map_vars,geom,alphas,
-                            fixalpha=False,fullSZcorr=False,SZtot=False,columnDen=False,Comptony=True,
-                                        finite=False,oldvs=False,fit_cen=False)
-
     ras      = ((np.random.rand(10000)*0.2 -0.1) * u.deg) + map_vars["racen"]
     decs     = ((np.random.rand(10000)*0.2 -0.1) * u.deg) + map_vars["deccen"]
-    
-    radarr  = radec2rad(ras, decs, map_vars["racen"], map_vars["deccen"], geoparams=[0,0,0,1,1,1,0,0])
-    radVals = (radarr.to('rad')).value
-    yVals   = np.interp(radVals, map_vars['thetas'],yProf)
+    yVals   = get_prof(ras,decs,pos,posind=0)
 
-    plot_example(radVals,yVals, map_vars['thetas'], yProf)
-    
-    return yVals
-    
-    
+    #yProf, outalphas = Comptony_profile(pos,posind,bins,sz_vars,map_vars,geom,alphas,
+    #                        fixalpha=False,fullSZcorr=False,SZtot=False,columnDen=False,Comptony=True,
+    #                                    finite=False,oldvs=False,fit_cen=False)
+    #ras      = ((np.random.rand(10000)*0.2 -0.1) * u.deg) + map_vars["racen"]
+    #decs     = ((np.random.rand(10000)*0.2 -0.1) * u.deg) + map_vars["deccen"]
+    #
+    #radarr  = radec2rad(ras, decs, map_vars["racen"], map_vars["deccen"], geoparams=[0,0,0,1,1,1,0,0])
+    #radVals = (radarr.to('rad')).value
+    #yVals   = np.interp(radVals, map_vars['thetas'],yProf)
+    yVals   = get_prof(ras,decs,pos,posind=0)   
+
+#class uvars:#
+#
+#    def __init__(self):#
+#
+#        sz_vars, map_vars, bins, Pdl2y, geom = get_underlying_vars()
+#
+#        self.sz_vars  = sz_vars
+#        self.map_vars = map_vars
+#        self.bins     = bins
+#        self.Pdl2y    = Pdl2y
+#        self.geom     = geom
+        
 class priors:
         
     def __init__(self):
