@@ -55,13 +55,13 @@
 #=======================================================================#
 
 import numpy as np
-import my_astro_defaults as mad
 import astropy.units as u
+import get_data_info as gdi
 import scipy.interpolate as spint
 import tSZ_spectrum as tsz
 
 ### Create some conversion values which may be useful throughout.
-szcv,szcu=mad.get_sz_values()
+szcv,szcu= gdi.get_sz_values()
 temp_conv = 1.0/szcv['m_e_c2']
 freq_conv = (szcv['planck'] *1.0e9)/(szcv['boltzmann']*szcv['tcmb'])
 
