@@ -2,9 +2,9 @@ import numpy as np
 import scipy as sp
 from scipy.interpolate import interp1d
 import astropy.units as u
-import ellipsoidal_shells as es
+import analytic_integrations as ai
 import os
-import retrieve_data_info as rdi
+import get_data_info as gdi
 
 def int_profile(profrad, profile,radProjected,zmax=0):
     """
@@ -36,7 +36,7 @@ def int_profile(profrad, profile,radProjected,zmax=0):
 def create_profile_alla_cer(hk,dv,efv,nw=True,plot=False,finite=False):
 
     prmunit = (efv.prmunit*u.keV).to("cm**3")
-    uless_r, edensity, etemperature, geoparams, inalphas = es.prep_a2146_binsky(hk.hk_ins,nw=nw)
+    uless_r, edensity, etemperature, geoparams, inalphas = ai.prep_a2146_binsky(hk.hk_ins,nw=nw)
     edensity = edensity*(prmunit.value) # Incorportate all the relevant factors. (~3.16)
     uless_rad = (uless_r/dv.cluster.d_a).value
     kpc_range = (dv.mapping.theta_range*dv.cluster.d_a).value;
@@ -82,7 +82,7 @@ def create_profile_alla_cer(hk,dv,efv,nw=True,plot=False,finite=False):
 def get_SZ_factors(temp,dv,hk,efv,beta=0.0,betaz=0.0):
 
     int_factors = (efv.factors*u.cm)*u.kpc.to("cm"); int_factors = int_factors.value
-    tSZ,kSZ = rdi.get_sz_bp_conversions(temp,hk.hk_ins.instrument,
+    tSZ,kSZ = gdi.get_sz_bp_conversions(temp,hk.hk_ins.instrument,
                                         array="2",inter=False,beta=beta,
                                         betaz=betaz,rel=True)
     return tSZ,kSZ,int_factors

@@ -4,7 +4,7 @@ from scipy.interpolate import interp1d # numpy should be faster...
 import scipy.special as sps
 
 ### 
-import retrieve_data_info as rdi
+import get_data_info as gdi
 
 def log_profile(args,r_bins,radii,alphas=[],rintmax=[]):
 
@@ -169,7 +169,7 @@ def integrate_profiles(density_proxy, etemperature, geoparams,r_bins,theta_range
                        
     if fullSZcorr == True:
         for i in range(len(etemperature)):
-            tSZ,kSZ = rdi.get_sz_bp_conversions(etemperature[i],instrument,array=array,inter=False,
+            tSZ,kSZ = gdi.get_sz_bp_conversions(etemperature[i],instrument,array=array,inter=False,
                                                 beta=beta,betaz=betaz,rel=True)
             vals[i] = tSZ*density_proxy[i]*etemperature[i] + kSZ*density_proxy[i]*sz_vars["m_e_c2"]
 
@@ -295,7 +295,7 @@ def binsky_SZ_general(edensity, etemperature, geoparams,r_bins,theta_range,xymap
 
     eff_pres = np.zeros(len(etemperature))
     for i in range(len(etemperature)):
-        tSZ,kSZ = rdi.get_sz_bp_conversions(etemperature[i],instrument,array=array,inter=False,
+        tSZ,kSZ = gdi.get_sz_bp_conversions(etemperature[i],instrument,array=array,inter=False,
                                         beta=beta,betaz=betaz,rel=True)
         ### 05 July 2017 - I need to check the proper factors for the kSZ term. (CR)
 #        print 'tSZ and kSZ values are: ',tSZ, kSZ

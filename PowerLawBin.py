@@ -234,8 +234,8 @@ def plot_example(radVals,yVals, thetas, yProf):
     plt.grid()
 
     filename = "example_plot.png"
-    savedir  = "/home/romero/Python/StandAlone/PressureModelling/"
-    fullpath = savedir+filename
-    plt.savefig(fullpath)
+    #savedir  = "/home/romero/Python/StandAlone/Comptony_Modelling/"
+    #fullpath = savedir+filename
+    plt.savefig(filename)
     #plt.close()
     
