@@ -5,14 +5,21 @@ import analytic_integrations as ai    # Well that could be misleading...
 import astropy.constants as const     # 
 from astropy.coordinates import Angle #
 import gNFW_profiles as gp            # Sure seems general purpose
-import yafc                           # 
-
 
 ### I do want these to be global.
-sz_vars, map_vars, bins, Pdl2y, geom = yafc.get_underlying_vars()
+sz_vars, map_vars, bins, Pdl2y, geom = gdi.get_underlying_vars()
 
 ra0  = map_vars["racen"].to('rad').value
 dec0 = map_vars["deccen"].to('rad').value
+
+def prof_from_rads(pos,bins,posind=0):
+
+    alphas    = pos*0.0
+    yProf, outalphas = Comptony_profile(pos,posind,bins,sz_vars,map_vars,geom,alphas,
+                            fixalpha=False,fullSZcorr=False,SZtot=False,columnDen=False,Comptony=True,
+                                        finite=False,oldvs=False,fit_cen=False)
+    return yProf
+
 
 def get_prof(ras,decs,pos,posind=0):
   

@@ -7,7 +7,7 @@ import astropy.units as u
 import astropy.constants as const
 import scipy.constants as spconst
 from astropy.cosmology import Planck15 as cosmo
-import importlib
+import numerical_integration as ni
 
 ############################################################################
             
@@ -64,6 +64,27 @@ def inst_params(instrument):
         smfw  = 60.0*u.arcsec
         freq  = 140.0*u.gigahertz    # GHz
         FoV   = 8.0*u.arcmin * (u.arcmin).to("arcsec")
+        
+    if instrument == "ACT90":
+        fwhm1 = 2.16*60.0*u.arcsec  # arcseconds
+        norm1 = 1.0     # normalization
+        fwhm2 = 1.0*u.arcsec # arcseconds
+        norm2 = 0.00     # normalization
+        fwhm  = 2.16*60.0*u.arcsec
+        smfw  = 2.0*60.0*u.arcsec
+        freq  = 97.0*u.gigahertz    # GHz
+        FoV   = 60.0*u.arcmin #* (u.arcmin).to("arcsec")
+        
+    if instrument == "ACT150":
+        fwhm1 = 1.3*60.0*u.arcsec  # arcseconds
+        norm1 = 1.0     # normalization
+        fwhm2 = 1.0*u.arcsec # arcseconds
+        norm2 = 0.00     # normalization
+        fwhm  = 1.3*60.0*u.arcsec
+        smfw  = 1.2*60.0*u.arcsec
+        freq  = 148.0*u.gigahertz    # GHz
+        FoV   = 60.0*u.arcmin #* (u.arcmin).to("arcsec")
+        
 
 #    else:
 #        fwhm1=9.0*u.arcsec ; norm1=1.0
@@ -168,38 +189,6 @@ def inst_bp(instrument,array="2"):
 #########################################################################
 
     return band, farr
-
-class maps:
-
-    def __init__(self,inputs):
-
-        print 'Reading in data from: ',inputs.fitsfile
-        data_map, header = fits.getdata(inputs.fitsfile, header=True)
-        wt_map = fits.getdata(inputs.wtfile,inputs.wtext)
-        if inputs.wtisrms == True: 
-            wt_map = wt_map**(-2.0)  # I'll need to account for zeros...
-        self.data   = data_map
-        self.header = header
-        self.wts    = wt_map
-        self.masked_wts = wt_map
-            
-        self.units  = inputs.units
-        self.name   = inputs.name
-
-        if inputs.instrument == "MUSTANG" or inputs.instrument == "MUSTANG2":
-            if inputs.units == 'Jy':
-                self.wts    = wt_map*1.0e6
-                self.masked_wts = wt_map*1.0e6
-            nzwts = (wt_map > 0)
-            keep=np.where(wt_map > np.median(wt_map[nzwts])/2.0)
-            mask=np.where(wt_map < np.median(wt_map[nzwts])/2.0)
-            gwts = wt_map[keep]
-            npix = len(gwts)
-            print 'FYI: with a mask threshold of median(wt_map), we use ',npix,\
-                'pixels, which is roughly equivalent to a circle of radius ',\
-                "{:7.1f}".format(np.sqrt(npix/np.pi)),' pixels.'
-            
-            self.masked_wts[mask] = 0.0
         
 def get_sz_bp_conversions(temp,instrument,units='Jy/beam',array="2",inter=False,beta=1.0/300.0,
                           betaz=1.0/300.0,rel=True,quiet=False):
@@ -547,3 +536,188 @@ def get_d_ang(z):
 def get_cosmo():
 
     return cosmo
+
+def get_underlying_vars():
+
+    ### Some cluster-dependent variables:
+    rxj1347_priors = rxj1347_priors()
+    m500           = rxj1347_priors.M500 * u.M_sun
+    z              = rxj1347_priors.z
+    #racen  = rxj1347_priors.ra.to('deg')
+    #deccen = rxj1347_priors.dec.to('deg')
+    ### Some fitting variables:
+    beamvolume=120.0 # in arcsec^2
+    radminmax = np.array([9.0,4.25*60.0])*(u.arcsec).to('rad')
+    nbins     = 6    # It's just a good number...so good, you could call it a perfect number.
+
+    ##############
+    bins      = np.logspace(np.log10(radminmax[0]),np.log10(radminmax[1]), nbins) 
+    #geom     = [X_shift, Y_shift, Rotation, Ella*, Ellb*, Ellc*, Xi*, Opening Angle]
+    geom      = [0,0,0,1,1,1,0,0] # This gives spherical geometry
+    map_vars  = get_map_vars(rxj1347_priors, instrument='MUSTANG2')
+    alphas    = np.zeros(nbins) #??
+    d_ang     = get_d_ang(z)
+    #binskpc   = bins * d_ang
+    sz_vars,szcu = get_sz_values()
+    sz_vars   = get_SZ_vars(temp=rxj1347_priors.Tx)
+    Pdl2y     = (szcu['thom_cross']*d_ang/szcu['m_e_c2']).to("cm**3 keV**-1")
+
+    return sz_vars, map_vars, bins, Pdl2y, geom
+
+class rxj1347_priors:
+        
+    def __init__(self):
+        
+        ###############################################################################
+        ### Prior known values regarding the RXJ1053. Redshift, ra, and dec *MUST* be
+        ### known / accurate. M_500 and Tx are useful for creating initial guesses.
+        ### Tx is still important if relativistic corrections may be severe.
+        
+        self.z     = 0.4510                      # Redshift
+        self.ra    = Angle('13h47m30.5s')     # Right Ascencion, in hours
+        self.dec   = Angle('-11d45m9s')       # Declination, in degrees
+        self.M500  = 2.2e15                 # Solar masses
+        self.Tx    = 10.8                  # keV
+        self.name  = 'rxj1347'
+        
+        ###  For when the time comes to use the *actual* coordinates for Abell 2146,
+        ###  Here they are. Even now, it's useful to calculate the offsets of the centroids
+        ###  for the radius of curvature of the shocks.
+
+class zw3146_priors:
+        
+    def __init__(self):
+        
+        ###############################################################################
+        ### Prior known values regarding the RXJ1053. Redshift, ra, and dec *MUST* be
+        ### known / accurate. M_500 and Tx are useful for creating initial guesses.
+        ### Tx is still important if relativistic corrections may be severe.
+        
+        self.z     = 0.291                      # Redshift
+        self.ra    = Angle('10h23m39.7087s') # Right Ascencion, in hours
+        self.dec   = Angle('+4d11m00.750s')  # Declination, in degrees
+        self.M_500 = 6.82e14                 # Solar masses
+        self.Tx    = 7.0                     # keV
+        self.name  = 'Zw3146'
+
+        ###  For when the time comes to use the *actual* coordinates for Abell 2146,
+        ###  Here they are. Even now, it's useful to calculate the offsets of the centroids
+        ###  for the radius of curvature of the shocks.
+
+### Copied from gNFW_profiles.py:
+
+def a10_from_m500_z(m500, z,rads):
+    """
+    INPUTS:
+    m500    - A quantity with units of mass
+    z       - redshift.
+    rads    - A quantity array with units of distance.
+    """
+    
+    r500, p500 = gdi.R500_P500_from_M500_z(m500,z)
+    gnfw_prof  = gnfw(r500,p500,rads)
+
+    return gnfw_prof
+
+### Copy this.   
+def gnfw(R500, P500, radii, c500= 1.177, p=8.403, a=1.0510, b=5.4905, c=0.3081):
+
+    cosmo = gdi.get_cosmo()
+    h70 = (cosmo.H(0) / (70.0*u.km / u.s / u.Mpc))
+
+    P0 = P500 * p * h70**-1.5
+    rP = R500 / c500 # C_500 = 1.177
+    rf =  (radii/rP).decompose().value # rf must be dimensionless
+    result = (P0 / (((rf)**c)*((1 + (rf)**a))**((b - c)/a)))
+
+    return result
+    
+def compton_y_profile_from_m500_z(M500, z, mycosmo):
+    """
+    Computes the Compton y profile for an A10 (gNFW) profile, integrated from
+    (z = +5*R500) to (z = -5*R500).
+
+    Returns the Compton y profile alongside a radial profile in kpc.
+    """
+
+    myprof, radii = pressure_profile_from_m500_z(M500, z, mycosmo, N_R500 = 10.0)
+
+    R500, P500 = R500_P500_from_M500_z(M500, z, mycosmo)
+    R_scaled = np.logspace(np.log10(10.0**(-4)), np.log10(5.0), 9000)
+    radProjected = R_scaled*R500
+
+    m_e_c2 = (const.m_e *const.c**2).to("keV")
+    thom_cross = const.sigma_T
+
+    unitless_profile = (myprof * thom_cross * u.kpc / m_e_c2).decompose()
+
+    inrad = radii.to("kpc"); zvals = radProjected.to("kpc")
+    
+    yprof = ni.int_profile(inrad.value, unitless_profile.value,zvals.value)
+
+    return yprof, inrad
+
+def Y_cyl(yprof, radii, Rmax, d_ang = 0, z=1.99):
+
+    if d_ang == 0:
+        d_a = cd.angular_diameter_distance(z, **cosmo) *u.Mpc
+    
+    try:
+        angle = radii.to("rad")   # Try converting to radians.
+        max_angle = Rmax.to("rad")
+    except:
+        print 'Radii are not given in angular units.'
+        print 'Using angular diameter to convert radii to angular units.'
+        angle = (radii/d_ang).decompose() * u.rad
+        max_angle = (Rmax/d_ang).decompose() * u.rad
+    
+    goodR  = (angle < max_angle)
+    goodprof = yprof[goodR]; goodangle = angle[goodR]
+    
+    prats = goodprof[:-1] / goodprof[1:]
+    arats = goodangle[:-1] / goodangle[1:]
+    alpha = np.log(prats) / np.log(arats)
+
+    parint= ((goodangle[1:]/u.rad)**(2.0-alpha) - (goodangle[:-1]/u.rad)**(2.0-alpha) ) * \
+            (goodprof[:-1]*(goodangle[:-1]/u.rad)**alpha) / (2.0 - alpha)
+    tint  = 2.0*np.pi * np.sum(parint) * u.sr
+
+    Ycyl  = tint.to("arcmin2")
+
+    print 'Ycyl found to be ', Ycyl
+
+    return Ycyl
+
+def Y_sphere(myprof, radii, Rmax, d_ang = 0, z=1.99):
+    
+    if d_ang == 0:
+        d_ang = cd.angular_diameter_distance(z, **cosmo) *u.Mpc
+
+    m_e_c2 = (const.m_e *const.c**2).to("keV")
+    thom_cross = const.sigma_T
+    unitless_profile = (myprof * thom_cross * u.kpc / m_e_c2).decompose()
+
+    goodR  = (radii < Rmax)
+    goodprof = unitless_profile[goodR]; goodradii = radii[goodR]
+
+    prats = goodprof[:-1] / goodprof[1:]
+    arats = goodradii[:-1] / goodradii[1:]
+    alpha = np.log(prats) / np.log(arats)
+     
+    parint= ((goodradii[1:]/u.kpc)**(3.0-alpha) - (goodradii[:-1]/u.kpc)**(3.0-alpha) ) * \
+            (goodprof[:-1]*(goodradii[:-1]/u.kpc)**alpha) / (3.0 - alpha)
+    tint  = 4.0*np.pi * np.sum(parint) * (u.kpc)**2
+
+    Ysphere = tint.to("Mpc2")
+
+    Ysphere_rad = Ysphere / d_ang
+    
+    print 'Ysphere found to be ', Ysphere
+    print 'or alternatively ', Ysphere_rad
+
+    return Ysphere
+
+
+
+
+    
