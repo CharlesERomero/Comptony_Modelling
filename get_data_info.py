@@ -8,6 +8,7 @@ import astropy.constants as const
 import scipy.constants as spconst
 from astropy.cosmology import Planck15 as cosmo
 import numerical_integration as ni
+from astropy.coordinates import Angle #
 
 ############################################################################
             
@@ -96,6 +97,29 @@ def inst_params(instrument):
 #    import pdb; pdb.set_trace()
 
     return fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV
+
+
+def ruze_eff(freqs,freq_ref,ref_eff,srms):
+    """
+    freqs     - an array of frequencies in GHz (unitless within Python)
+    freq_ref  - reference frequency     in GHz
+    ref_eff   - reference aperature efficiency at the reference frequency.
+    srms      - Surface RMS, in meters (with units in Python)
+    """
+
+    R_ref  = np.exp(-4.0*np.pi*(srms/(const.c/(freq_ref*1.0e9*u.s**-1))).value)    #
+    Gnot   = ref_eff / R_ref
+    
+    tran = freqs*0.0 + 1.0            # Let the transmission be unity everywhere.
+    Larr = const.c.value/(freqs*1.0e9) # Keep calm and carry on.
+    ### Old formula:
+    #Ruze = Gnot * np.exp(-4.0*np.pi*(srms.value)/Larr)
+    ### Correct formula: (10 April 2018)
+    Ruze = Gnot * np.exp(-(4.0*np.pi*srms.value/Larr)**2)
+    NRuz = Ruze / np.max(Ruze)        # Normalize it
+    band = tran * Ruze                # Bandpass, with (unnormalized) Ruze efficiency
+
+    return band
 
 def inst_bp(instrument,array="2"):
     """
@@ -187,6 +211,29 @@ def inst_bp(instrument,array="2"):
         farr = freq
         
 #########################################################################
+
+    if instrument == 'ACT90':
+        srms = (27.0*u.um).to("m")        # surface RMS (microns)
+        EA90 = 0.95   # I'm making this number up...
+        R90  = np.exp(-4.0*np.pi*(srms/(const.c/(9.0e10*u.s**-1))).value)    #
+        Gnot = EA90/R90                   # Unphysical, but see documentation...
+        flow = 65.0   # GHz
+        fhig = 125.0  # GHz
+        farr = np.arange(flow,fhig,1.0)  # frequency array.
+        freq_ref = 90.0 # I took EA90 to be a fictitious aperature efficiency at 90 GHz
+        band =  ruze_eff(farr,freq_ref,EA90,srms)
+
+    if instrument == 'ACT150':
+        srms = (27.0*u.um).to("m")        # surface RMS (microns)
+        EA90 = 0.95   #  I'm making this number up...
+        R90  = np.exp(-4.0*np.pi*(srms/(const.c/(9.0e10*u.s**-1))).value)    #
+        Gnot = EA90/R90                   # Unphysical, but see documentation...
+        flow = 120.0   # GHz
+        fhig = 180.0  # GHz
+        farr = np.arange(flow,fhig,1.0)  # frequency array.
+        freq_ref = 90.0 # I took EA90 to be a fictitious aperature efficiency at 90 GHz
+        band =  ruze_eff(farr,freq_ref,EA90,srms)
+
 
     return band, farr
         
@@ -495,7 +542,7 @@ def get_SZ_vars(temp=5.0,instrument='MUSTANG2',units='Jy/beam'):
 
 def get_map_vars(cluster_priors,instrument='MUSTANG2'):
 
-    m500   = cluster_priors.M500 * u.M_sun
+    m500   = cluster_priors.M_500 * u.M_sun
     z      = cluster_priors.z
 
     d_ang = get_d_ang(z)
@@ -537,12 +584,16 @@ def get_cosmo():
 
     return cosmo
 
-def get_underlying_vars():
+def get_underlying_vars(cluster='Zw3146'):
 
     ### Some cluster-dependent variables:
-    rxj1347_priors = rxj1347_priors()
-    m500           = rxj1347_priors.M500 * u.M_sun
-    z              = rxj1347_priors.z
+    if cluster == 'Zw3146':
+        my_priors  = zw3146_priors()
+    if cluster == 'RXJ1347':
+        my_priors  = rxj1347_priors()
+        
+    m500       = my_priors.M_500 * u.M_sun
+    z          = my_priors.z
     #racen  = rxj1347_priors.ra.to('deg')
     #deccen = rxj1347_priors.dec.to('deg')
     ### Some fitting variables:
@@ -554,12 +605,12 @@ def get_underlying_vars():
     bins      = np.logspace(np.log10(radminmax[0]),np.log10(radminmax[1]), nbins) 
     #geom     = [X_shift, Y_shift, Rotation, Ella*, Ellb*, Ellc*, Xi*, Opening Angle]
     geom      = [0,0,0,1,1,1,0,0] # This gives spherical geometry
-    map_vars  = get_map_vars(rxj1347_priors, instrument='MUSTANG2')
+    map_vars  = get_map_vars(my_priors, instrument='MUSTANG2')
     alphas    = np.zeros(nbins) #??
     d_ang     = get_d_ang(z)
     #binskpc   = bins * d_ang
-    sz_vars,szcu = get_sz_values()
-    sz_vars   = get_SZ_vars(temp=rxj1347_priors.Tx)
+    szcv,szcu = get_sz_values()
+    sz_vars   = get_SZ_vars(temp=my_priors.Tx)
     Pdl2y     = (szcu['thom_cross']*d_ang/szcu['m_e_c2']).to("cm**3 keV**-1")
 
     return sz_vars, map_vars, bins, Pdl2y, geom
@@ -573,11 +624,11 @@ class rxj1347_priors:
         ### known / accurate. M_500 and Tx are useful for creating initial guesses.
         ### Tx is still important if relativistic corrections may be severe.
         
-        self.z     = 0.4510                      # Redshift
+        self.z     = 0.4510                   # Redshift
         self.ra    = Angle('13h47m30.5s')     # Right Ascencion, in hours
         self.dec   = Angle('-11d45m9s')       # Declination, in degrees
-        self.M500  = 2.2e15                 # Solar masses
-        self.Tx    = 10.8                  # keV
+        self.M_500 = 2.2e15                   # Solar masses
+        self.Tx    = 10.8                     # keV
         self.name  = 'rxj1347'
         
         ###  For when the time comes to use the *actual* coordinates for Abell 2146,
@@ -614,7 +665,7 @@ def a10_from_m500_z(m500, z,rads):
     rads    - A quantity array with units of distance.
     """
     
-    r500, p500 = gdi.R500_P500_from_M500_z(m500,z)
+    r500, p500 = R500_P500_from_M500_z(m500,z)
     gnfw_prof  = gnfw(r500,p500,rads)
 
     return gnfw_prof
@@ -622,7 +673,7 @@ def a10_from_m500_z(m500, z,rads):
 ### Copy this.   
 def gnfw(R500, P500, radii, c500= 1.177, p=8.403, a=1.0510, b=5.4905, c=0.3081):
 
-    cosmo = gdi.get_cosmo()
+    cosmo = get_cosmo()
     h70 = (cosmo.H(0) / (70.0*u.km / u.s / u.Mpc))
 
     P0 = P500 * p * h70**-1.5

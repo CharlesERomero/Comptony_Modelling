@@ -2,20 +2,54 @@ import numpy as np                    # A useful module
 import astropy.units as u             # U just got imported!
 import get_data_info as gdi           # Not much of a joke to make here.
 import analytic_integrations as ai    # Well that could be misleading...
-import astropy.constants as const     # 
-from astropy.coordinates import Angle #
-import gNFW_profiles as gp            # Sure seems general purpose
+#import astropy.constants as const     # 
+#from astropy.coordinates import Angle #
 
 ### I do want these to be global.
-sz_vars, map_vars, bins, Pdl2y, geom = gdi.get_underlying_vars()
+sz_vars, map_vars, bins, Pdl2y, geom = gdi.get_underlying_vars('Zw3146')
+tM2c,  kM2c    = gdi.get_sz_bp_conversions(sz_vars['temp'],'MUSTANG2',units='Kelvin', inter=False,
+                                  beta=0.0/300.0,betaz=0.0/300.0,rel=True,quiet=False)
+tA090c, kA090c = gdi.get_sz_bp_conversions(sz_vars['temp'],'ACT90',units='Kelvin', inter=False,
+                                  beta=0.0/300.0,betaz=0.0/300.0,rel=True,quiet=False)
+tA150c, kA150c = gdi.get_sz_bp_conversions(sz_vars['temp'],'ACT150',units='Kelvin', inter=False,
+                                  beta=0.0/300.0,betaz=0.0/300.0,rel=True,quiet=False)
+#A090c = gdi.get_SZ_vars(temp=,instrument='ACT90',units='Kelvin')
+#A150c = gdi.get_SZ_vars(temp=sz_vars['temp'],instrument='ACT150',units='Kelvin')
 
 ra0  = map_vars["racen"].to('rad').value
 dec0 = map_vars["deccen"].to('rad').value
 
-def prof_from_rads(pos,bins,posind=0):
+def get_def_bins():
+
+    mybins  = np.arange(2.0,200.0,4.0) # The spacing in arcseconds
+    mybins *= np.pi / (3600.0*180.0)   # Now in radians
+
+    return mybins
+
+def a10_prof_from_rads(mybins):
+
+    """
+    mybins needs to be in radians.
+    """
+    
+    rads      = mybins * map_vars["d_ang"]
+    a10pres   = gdi.a10_from_m500_z(map_vars["m500"], map_vars["z"], rads)
+    uless_p   = (a10pres*Pdl2y).decompose().value   # Unitless array
+    alphas    = uless_p*0.0
+    pos       = uless_p                             # These to be fed in via MCMC
+    posind    = 0
+
+    yProf = prof_from_pars_rads(pos,mybins,posind)
+
+    return yProf
+    
+def prof_from_pars_rads(pos,mybins,posind=0):
+    """
+    mybins needs to be in radians.
+    """
 
     alphas    = pos*0.0
-    yProf, outalphas = Comptony_profile(pos,posind,bins,sz_vars,map_vars,geom,alphas,
+    yProf, outalphas = Comptony_profile(pos,posind,mybins,sz_vars,map_vars,geom,alphas,
                             fixalpha=False,fullSZcorr=False,SZtot=False,columnDen=False,Comptony=True,
                                         finite=False,oldvs=False,fit_cen=False)
     return yProf
@@ -46,7 +80,7 @@ def example_profile():
     (3) 
     """
     rads      = bins * map_vars["d_ang"]
-    a10pres   = gp.a10_from_m500_z(map_vars["m500"], map_vars["z"], rads)
+    a10pres   = gdi.a10_from_m500_z(map_vars["m500"], map_vars["z"], rads)
     uless_p   = (a10pres*Pdl2y).decompose().value   # Unitless array
     alphas    = uless_p*0.0
     pos       = uless_p                             # These to be fed in via MCMC
