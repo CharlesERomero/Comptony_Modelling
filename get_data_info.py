@@ -86,7 +86,6 @@ def inst_params(instrument):
         freq  = 148.0*u.gigahertz    # GHz
         FoV   = 60.0*u.arcmin #* (u.arcmin).to("arcsec")
         
-
 #    else:
 #        fwhm1=9.0*u.arcsec ; norm1=1.0
 #        fwhm2=30.0*u.arcsec ; norm2=0.0
@@ -236,14 +235,22 @@ def inst_bp(instrument,array="2"):
 
 
     return band, farr
-        
-def get_sz_bp_conversions(temp,instrument,units='Jy/beam',array="2",inter=False,beta=1.0/300.0,
-                          betaz=1.0/300.0,rel=True,quiet=False):
 
+def get_sz_bp_conversions(temp,instrument,units='Kelvin',array="2",inter=False,beta=1.0/300.0,
+                          betaz=1.0/300.0,rel=True,quiet=False,cluster='Default',RJ=False):
+    """
+    + Updates: (8 March 2019), changed default units to Kelvin
+    + RJ is still left as False by default, as I have a lower statement that makes it True
+    + For MUSTANG-2.
+    -------------------------------------------------------------------------
+    This module calculates the conversion factor, f(x) or g(x), depending on whether you are
+    working with Kelvin (for f(x)), or Jy/beam (for g(x)).
+    
+    """
     szcv,szcu=get_sz_values()
     freq_conv = (szcv['planck'] *1.0e9)/(szcv['boltzmann']*szcv['tcmb'])
     temp_conv = 1.0/szcv['m_e_c2']
-    bv = get_beamvolume(instrument)
+    bv = get_beamvolume(instrument,cluster)
 #    fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = inst_params(instrument)
     band, farr = inst_bp(instrument,array)
     fstep = np.median(farr - np.roll(farr,1))
@@ -289,7 +296,12 @@ def get_sz_bp_conversions(temp,instrument,units='Jy/beam',array="2",inter=False,
 
     JypB = tsz.Jyperbeam_factors(bv)        # Jy per beam conversion factor, from y (bT)
     xavg = np.sum(xarr*band)/np.sum(band)   # Bandpass averaged frequency; should be a reasonable approximation.
-    Kepy = tsz.TBright_factors(xavg)        # Kelvin conversion factor, from y (bT)
+    Kepy = tsz.TBright_factors(xavg)        # Kelvin_CMB conversion factor, from y (bT)
+    KCMB_per_KRJ = 1.23                     # At 90 GHz, from Tony
+    #KCMB_per_KRJ = 1.286                     # At 90 GHz, with some fudge?
+    if instrument == "MUSTANG2": RJ = True
+    if RJ: Kepy /= KCMB_per_KRJ
+    #import pdb;pdb.set_trace()
     
     tSZ_JyBeam_per_y = JypB * bT  # Just multiply by Compton y to get Delta I (tSZ)
     kSZ_JyBeam_per_t = JypB * bK  # Just multiply by tau (of electrons) to get Delta I (kSZ)
@@ -330,7 +342,7 @@ def get_maps_and_info(instrument,target,real=True):
 #
 #    image_data, ras, decs, hdr, pixs = get_astro(file)
 
-def get_beamvolume(instrument):
+def get_beamvolume(instrument,cluster):
 
     ### The default is to assume a double Gaussian
     fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = inst_params(instrument)
@@ -342,6 +354,27 @@ def get_beamvolume(instrument):
     bv2 = 2.0*np.pi * norm2*sig2**2   # Calculate the integral
     beamvolume = bv1 + bv2  # In units of FWHM**2 (should be arcsec squared) 
 
+    if instrument == 'MUSTANG2':
+        Jy2K = 0.9
+        if cluster == 'Zw3146':
+            Jy2K       = 0.8186015
+        if cluster == 'HSC_2':
+            Jy2K       = 1.00
+        if cluster == 'MOO_0105':
+            Jy2K       = 0.7910
+        if cluster == 'MOO_0135':
+            Jy2K       = 0.7029
+        if cluster == 'MOO_1014':
+            Jy2K       = 0.6777
+        if cluster == 'MOO_1059':
+            Jy2K       = 0.7668
+        if cluster == 'MOO_1110':
+            Jy2K       = 0.8458
+        if cluster == 'MOO_1142':
+            Jy2K       = 0.9990
+        beamvolume = get_bv_from_Jy2K(Jy2K,instrument)
+        #import pdb;pdb.set_trace()
+    
     print 'Using ',beamvolume,' for MUSTANG2.'
 #    if instrument == 'MUSTANG2':
 #        beamvolume = beamvolume*0.0 + 110.0 # Hopefully this keeps the units...
@@ -368,7 +401,7 @@ def get_sz_conversion(temp,instrument,beta=0.0,betaz=0.0):
     CtSZ, CkSZ
     """
 
-    bv = get_beamvolume(instrument)
+    bv = get_beamvolume(instrument,cluster)
     fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = inst_params(instrument)
  #   conv = tsz.tSZ_conv_single(temp,freq.value)
     bpsr = tsz.intensity_factors(freq.value,bv)
@@ -466,13 +499,13 @@ def get_xfer(inputs):
 
 ############################################################################
 
-def get_conv_factor(instrument):
+def get_conv_factor(instrument,cluster='Default'):
     
     fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = inst_params(instrument)
     #freq = 90.0 * u.GHz;     instrument='MUSTANG2'
     szcv,szcu = get_sz_values()
     x = szcv["planck"]*(freq.to("Hz")).value / (szcv["boltzmann"]*szcv["tcmb"])
-    bv = get_beamvolume(instrument)
+    bv = get_beamvolume(instrument,cluster)
 
     fofx = x * (np.exp(x) + 1.0)/(np.exp(x) - 1.0) - 4.0 # Delta T / T * y
     gofx = fofx * x**4 * np.exp(x) / (np.exp(x) - 1)**2  # Delta I / I * y
@@ -528,12 +561,12 @@ def get_sz_values():
 
     return sz_cons_values, sz_cons_units
 
-def get_SZ_vars(temp=5.0,instrument='MUSTANG2',units='Jy/beam'):
+def get_SZ_vars(temp=5.0,instrument='MUSTANG2',units='Kelvin',cluster='Zw3146'):
 
     sz_vars,szcu = get_sz_values()
-    tSZ,kSZ = get_sz_bp_conversions(temp,instrument,units=units,array="2",
-                                           inter=False,beta=0.0/300.0,
-                                           betaz=0.0/300.0,rel=True,quiet=False)
+    tSZ,kSZ = get_sz_bp_conversions(temp,instrument,units=units,array="2",inter=False,
+                                    beta=0.0/300.0,betaz=0.0/300.0,rel=True,
+                                    quiet=False,cluster=cluster)
     sz_vars['tSZ'] = tSZ
     sz_vars['kSZ'] = kSZ
     sz_vars['temp']= temp
@@ -554,10 +587,19 @@ def get_map_vars(cluster_priors,instrument='MUSTANG2'):
     tnx       = [minpixrad.value,10.0*r500ang.value]  # In radians
     thetas    = np.logspace(np.log10(tnx[0]),np.log10(tnx[1]), nb_theta_range)
     
-    map_vars={"instrument":instrument,"thetas":thetas, "d_ang":d_ang,
-              "m500":m500,"r500":r500,"p500":p500,"z":z,
-              "racen":cluster_priors.ra.to('deg'),"deccen":cluster_priors.dec.to('deg')}
+    h         = cosmo.H(z)/cosmo.H(0)
+    rho_crit  = cosmo.critical_density(z)
+    E         = cosmo.H(z)/cosmo.H(0)
+    h70       = (cosmo.H(0) / (70.0*u.km / u.s / u.Mpc))
 
+    map_vars={"instrument":instrument,"thetas":thetas, "d_ang":d_ang,
+              "m500":m500,"r500":r500,"p500":p500,"z":z,"hofz":h,"h70":h70,"rho_crit":rho_crit,
+              "racen":cluster_priors.ra.to('deg'),"deccen":cluster_priors.dec.to('deg'),
+              "y500s":np.zeros(nb_theta_range),"nrbins":nb_theta_range}
+
+    arrys,arrms,arrps = yMP500_from_r500(thetas,map_vars,ySZ=True)
+    map_vars["y500s"] = arrys
+    
     return map_vars
 
 def R500_P500_from_M500_z(M500,z):
@@ -584,22 +626,45 @@ def get_cosmo():
 
     return cosmo
 
-def get_underlying_vars(cluster='Zw3146'):
+def get_underlying_vars(cluster='Zw3146',instrument='MUSTANG2',units='Kelvin'):
 
     ### Some cluster-dependent variables:
     if cluster == 'Zw3146':
         my_priors  = zw3146_priors()
     if cluster == 'RXJ1347':
         my_priors  = rxj1347_priors()
+    if cluster == 'HSC_2':
+        my_priors  = hsc_2_priors()
+    if cluster == 'MOO_0105':
+        my_priors  = moo_0105_priors()
+    if cluster == 'MOO_0135':
+        my_priors  = moo_0135_priors()
+    if cluster == 'MOO_1014':
+        my_priors  = moo_1014_priors()
+    if cluster == 'MOO_1031':
+        my_priors  = moo_1031_priors()
+    if cluster == 'MOO_1046':
+        my_priors  = moo_1046_priors()
+    if cluster == 'MOO_1059':
+        my_priors  = moo_1059_priors()
+    if cluster == 'MOO_1108':
+        my_priors  = moo_1108_priors()
+    if cluster == 'MOO_1110':
+        my_priors  = moo_1110_priors()
+    if cluster == 'MOO_1142':
+        my_priors  = moo_1142_priors()
         
     m500       = my_priors.M_500 * u.M_sun
     z          = my_priors.z
     #racen  = rxj1347_priors.ra.to('deg')
     #deccen = rxj1347_priors.dec.to('deg')
     ### Some fitting variables:
-    beamvolume=120.0 # in arcsec^2
-    radminmax = np.array([9.0,4.25*60.0])*(u.arcsec).to('rad')
-    nbins     = 6    # It's just a good number...so good, you could call it a perfect number.
+    beamvolume=138.0 # in arcsec^2
+    #nbins     = 6    # It's just a good number...so good, you could call it a perfect number.
+    #nbins     = 18    # It's just a good number...so good, you could call it a perfect number.
+    nbins     = 12    # It's just a good number...so good, you could call it a perfect number.
+    #radminmax = np.array([10.0,4.25*60.0])*(u.arcsec).to('rad')
+    radminmax = np.array([5.0,5.0*60.0])*(u.arcsec).to('rad')
 
     ##############
     bins      = np.logspace(np.log10(radminmax[0]),np.log10(radminmax[1]), nbins) 
@@ -610,7 +675,7 @@ def get_underlying_vars(cluster='Zw3146'):
     d_ang     = get_d_ang(z)
     #binskpc   = bins * d_ang
     szcv,szcu = get_sz_values()
-    sz_vars   = get_SZ_vars(temp=my_priors.Tx)
+    sz_vars   = get_SZ_vars(temp=my_priors.Tx,cluster=cluster,units=units)
     Pdl2y     = (szcu['thom_cross']*d_ang/szcu['m_e_c2']).to("cm**3 keV**-1")
 
     return sz_vars, map_vars, bins, Pdl2y, geom
@@ -645,8 +710,10 @@ class zw3146_priors:
         ### Tx is still important if relativistic corrections may be severe.
         
         self.z     = 0.291                      # Redshift
-        self.ra    = Angle('10h23m39.7087s') # Right Ascencion, in hours
-        self.dec   = Angle('+4d11m00.750s')  # Declination, in degrees
+        self.ra    = Angle('10h23m39.3336s') # From latest fits (March 1st, 2019)
+        self.dec   = Angle('4d11m14.1248s')  # From latest fits (March 1st, 2019)
+        #self.ra    = Angle('10h23m39.7087s') # Right Ascencion, in hours
+        #self.dec   = Angle('+4d11m00.750s')  # Declination, in degrees
         self.M_500 = 6.82e14                 # Solar masses
         self.Tx    = 7.0                     # keV
         self.name  = 'Zw3146'
@@ -654,6 +721,149 @@ class zw3146_priors:
         ###  For when the time comes to use the *actual* coordinates for Abell 2146,
         ###  Here they are. Even now, it's useful to calculate the offsets of the centroids
         ###  for the radius of curvature of the shocks.
+
+class hsc_1_priors:
+        
+    def __init__(self):
+             
+        self.z     = 0.434                   # Redshift
+        self.ra    = Angle('2h10m56.0s')     # Right Ascencion, in hours
+        self.dec   = Angle('-6d11m54.0s')    # Declination, in degrees
+        self.M_500 = 2.0e14                  # Solar masses
+        self.Tx    = 5.0                     # keV
+        self.name  = 'HSC_1'
+
+class hsc_2_priors:
+        
+    def __init__(self):
+             
+        self.z     = 0.4296                  # Redshift
+        self.ra    = Angle('2h21m45.7s')     # Right Ascencion, in hours
+        self.dec   = Angle('-3d46m18.8s')    # Declination, in degrees
+        self.M_500 = 2.0e14                  # Solar masses
+        self.Tx    = 5.0                     # keV
+        self.name  = 'HSC_2'
+
+class hsc_3_priors:
+        
+    def __init__(self):
+             
+        self.z     = 0.4202                  # Redshift
+        self.ra    = Angle('2h33m35.6s')     # Right Ascencion, in hours
+        self.dec   = Angle('-5d30m21.6s')    # Declination, in degrees
+        self.M_500 = 2.0e14                  # Solar masses
+        self.Tx    = 5.0                     # keV
+        self.name  = 'HSC_3'
+
+class moo_0105_priors:
+        
+    def __init__(self):
+             
+        self.z     = 1.14                    # Redshift
+        self.ra    = Angle('1h05m31.27s')    # Right Ascencion, in hours
+        self.dec   = Angle('+13d24m14.93s')  # Declination, in degrees
+        self.M_500 = 4.0e14                  # Solar masses
+        self.Tx    = 5.0                     # keV
+        self.name  = 'MOO_0105'
+
+class moo_0135_priors:
+        
+    def __init__(self):
+             
+        self.z     = 1.46                    # Redshift
+        self.ra    = Angle('1h35m04.3s')    # Right Ascencion, in hours
+        self.dec   = Angle('+32d07m27.2s')  # Declination, in degrees
+        self.M_500 = 3.0e14                  # Solar masses
+        self.Tx    = 5.0                     # keV
+        self.name  = 'MOO_0135'
+
+class moo_1014_priors:
+        
+    def __init__(self):
+             
+        self.z     = 1.23                    # Redshift
+        self.ra    = Angle('10h14m07.49s')    # Right Ascencion, in hours
+        self.dec   = Angle('+00d38m30.2s')  # Declination, in degrees
+        self.M_500 = 4.0e14                  # Solar masses
+        self.Tx    = 5.0                     # keV
+        self.name  = 'MOO_1014'
+
+class moo_1031_priors:
+        
+    def __init__(self):
+             
+        self.z     = 1.33                    # Redshift
+        self.ra    = Angle('10h31m48.23s')    # Right Ascencion, in hours
+        self.dec   = Angle('+62d55m30.5s')  # Declination, in degrees
+        self.M_500 = 3.0e14                  # Solar masses
+        self.Tx    = 4.0                     # keV
+        self.name  = 'MOO_1031'
+
+class moo_1046_priors:
+        
+    def __init__(self):
+             
+        self.z     = 1.17                    # Redshift
+        self.ra    = Angle('10h46m52.82s')    # Right Ascencion, in hours
+        self.dec   = Angle('+27d58m02.9s')  # Declination, in degrees
+        self.M_500 = 3.0e14                  # Solar masses
+        self.Tx    = 4.0                     # keV
+        self.name  = 'MOO_1046'
+
+class moo_1059_priors:
+        
+    def __init__(self):
+             
+        self.z     = 1.14                    # Redshift
+        self.ra    = Angle('10h59m50.83s')    # Right Ascencion, in hours
+        self.dec   = Angle('+54d54m58.4s')  # Declination, in degrees
+        self.M_500 = 3.0e14                  # Solar masses
+        self.Tx    = 5.0                     # keV
+        self.name  = 'MOO_1059'
+
+class moo_1108_priors:
+        
+    def __init__(self):
+             
+        self.z     = 1.12                    # Redshift
+        self.ra    = Angle('11h08m48.00s')   # Right Ascencion, in hours
+        self.dec   = Angle('+32d43m35.8s')   # Declination, in degrees
+        self.M_500 = 3.0e14                  # Solar masses
+        self.Tx    = 5.0                     # keV
+        self.name  = 'MOO_1110'
+
+class moo_1110_priors:
+        
+    def __init__(self):
+             
+        self.z     = 0.93                    # Redshift
+        self.ra    = Angle('11h10m57.15s')   # Right Ascencion, in hours
+        self.dec   = Angle('+68d38m30.7s')   # Declination, in degrees
+        self.M_500 = 3.0e14                  # Solar masses
+        self.Tx    = 5.0                     # keV
+        self.name  = 'MOO_1110'
+
+class moo_1142_priors:
+        
+    def __init__(self):
+             
+        self.z     = 1.19                    # Redshift
+        self.ra    = Angle('11h42m45.51s')    # Right Ascencion, in hours
+        self.dec   = Angle('+15d27m15.4s')  # Declination, in degrees
+        self.M_500 = 4.0e14                  # Solar masses
+        self.Tx    = 5.0                     # keV
+        self.name  = 'MOO_1142'
+
+class jkcs041_priors:
+        
+    def __init__(self):
+             
+        self.z     = 1.80                    # Redshift
+        self.ra    = Angle('2h26m43.99s')    # Right Ascencion, in hours
+        self.dec   = Angle('-4d41m35.9s')  # Declination, in degrees
+        self.M_500 = 2.0e14                  # Solar masses
+        self.Tx    = 3.0                     # keV
+        self.name  = 'jkcs041'
 
 ### Copied from gNFW_profiles.py:
 
@@ -667,7 +877,7 @@ def a10_from_m500_z(m500, z,rads):
     
     r500, p500 = R500_P500_from_M500_z(m500,z)
     gnfw_prof  = gnfw(r500,p500,rads)
-
+    
     return gnfw_prof
 
 ### Copy this.   
@@ -678,6 +888,8 @@ def gnfw(R500, P500, radii, c500= 1.177, p=8.403, a=1.0510, b=5.4905, c=0.3081):
 
     P0 = P500 * p * h70**-1.5
     rP = R500 / c500 # C_500 = 1.177
+    #print rP.shape,rP,R500.to('Mpc'),c500,P0
+    #print radii.shape,np.min(radii),np.max(radii)
     rf =  (radii/rP).decompose().value # rf must be dimensionless
     result = (P0 / (((rf)**c)*((1 + (rf)**a))**((b - c)/a)))
 
@@ -769,6 +981,96 @@ def Y_sphere(myprof, radii, Rmax, d_ang = 0, z=1.99):
     return Ysphere
 
 
+def yMP500_from_r500(radian500,map_vars,ySZ=True):
 
+    h = cosmo.H(map_vars['z'])/cosmo.H(0)
+    d_a = map_vars['d_ang'].to('Mpc').value
+    rho_crit = cosmo.critical_density(map_vars['z'])
+    E   = cosmo.H(map_vars['z'])/cosmo.H(0)
+    h70 = (cosmo.H(0) / (70.0*u.km / u.s / u.Mpc))
+    #h70 = h70.value
 
+    Jofx    = 0.7398
+    YMscale = 1.78
+
+    ### So, when I do my initial Y500 calculation, it's just Y_SZ (without D_A**2, h(z)**-2/3).
+    ### In this case, "yinteg" is Y_SZ, so set ySZ = True. However, when I come from the end of
+    ### the MCMC run, then I've included these factors and thus ySZ = False.
+    if ySZ == True:
+        iv      = h**(-1./3)*d_a
+        lside   = iv**2
+    else:
+        lside   = 1.0
+
+    #import pdb;pdb.set_trace()
+    r500p   = radian500*map_vars['d_ang'].to('Mpc')
+    m500    = ((4*np.pi/3)*(500*rho_crit)*r500p**3).to('Msun')
+        
+    Bofx    = 2.925e-5 * Jofx * h70**(-1)
+    Y500    = (Bofx/lside)* (m500*h70 / (3e14 * u.Msun))**YMscale
     
+    #smu     = (lside/Bofx)**(1.0/YMscale)
+    #M500_i  = smu * 3e14 * u.Msun / h70   # In solar masses
+    #R500_i  = (3 * M500_i/(4 * np.pi  * 500.0 * rho_crit))**(1/3.)
+    #Mpc     = R500_i.decompose()
+    #Mpc     = Mpc.to('Mpc')
+    #r500    = (Mpc.value / d_a)
+
+    P500 = (1.65 * 10**-3) * ((E)**(8./3)) * ((
+        m500 * h70)/ ((3*10**14) * const.M_sun)
+        )**(2./3) * h70**2 * u.keV / u.cm**3
+
+    return Y500, m500, P500
+
+def rMP500_from_y500(yinteg,map_vars,ySZ=True):
+    """
+    Provide h and d_a as scalars:
+
+    h        - little h (the one that changes with z)
+    d_a      - angular distance, in Mpc, but just a value (not a quantity)
+    rho_crit - has units of density!!!
+
+    """
+
+    h = cosmo.H(map_vars['z'])/cosmo.H(0)
+    d_a = map_vars['d_ang'].to('Mpc').value
+    rho_crit = cosmo.critical_density(map_vars['z'])
+    E   = cosmo.H(map_vars['z'])/cosmo.H(0)
+    h70 = (cosmo.H(0) / (70.0*u.km / u.s / u.Mpc))
+    #h70 = h70.value
+
+    Jofx    = 0.7398
+    YMscale = 1.78
+
+    ### So, when I do my initial Y500 calculation, it's just Y_SZ (without D_A**2, h(z)**-2/3).
+    ### In this case, "yinteg" is Y_SZ, so set ySZ = True. However, when I come from the end of
+    ### the MCMC run, then I've included these factors and thus ySZ = False.
+    if ySZ == True:
+        iv      = h**(-1./3)*d_a
+        lside   = yinteg*iv**2
+    else:
+        lside   = yinteg
+        
+    Bofx    = 2.925e-5 * Jofx * h70**(-1)
+    smu     = (lside/Bofx)**(1.0/YMscale)
+    M500_i  = smu * 3e14 * u.Msun / h70   # In solar masses
+    R500_i  = (3 * M500_i/(4 * np.pi  * 500.0 * rho_crit))**(1/3.)
+    Mpc     = R500_i.decompose()
+    Mpc     = Mpc.to('Mpc')
+    r500    = (Mpc.value / d_a)
+
+    P500 = (1.65 * 10**-3) * ((E)**(8./3)) * ((
+        M500_i * h70)/ ((3*10**14) * const.M_sun)
+        )**(2./3) * h70**2 * u.keV / u.cm**3
+
+    return r500, M500_i, P500
+
+def get_bv_from_Jy2K(Jy2K,instrument):
+
+    fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = inst_params(instrument)
+    wl = (const.c / freq).to('m').value
+    a2r = ((1.0/3600.0/180.)*np.pi)**2
+    rjk = (1e-3 *wl**2)/(2.0*1.38064)  # 1e-26 / 1e-23 = 1e-3 (1e-26 for Jy to W; 1e-23 for OoM of Boltzmann constant)
+    vol = Jy2K / (a2r/rjk) * u.arcsec**2
+
+    return vol

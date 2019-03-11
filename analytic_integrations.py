@@ -892,3 +892,13 @@ def myredcosine(tmax,n):
           res=np.tan(tmax) 
 
       return res
+
+def ycyl_prep(Int_Pres,theta_range):
+
+    lnp = np.log(Int_Pres)
+    ltr = np.log(theta_range)
+
+    alpha = (np.roll(lnp,-1) - lnp ) / (np.roll(ltr,-1) - ltr )
+    k     = Int_Pres / theta_range**alpha
+
+    return alpha,k

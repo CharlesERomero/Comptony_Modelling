@@ -86,3 +86,14 @@ def get_SZ_factors(temp,dv,hk,efv,beta=0.0,betaz=0.0):
                                         array="2",inter=False,beta=beta,
                                         betaz=betaz,rel=True)
     return tSZ,kSZ,int_factors
+
+def Ycyl_from_yProf(yprof,rads,r500,nrads=10000.0):
+
+    radVals = np.arange(nrads)*r500/nrads
+    drad    = r500/nrads
+    yVals   = np.interp(radVals, rads,yprof)
+    goodr   = (radVals < r500)
+    
+    Yint = np.sum(yVals[goodr] * 2.0 * np.pi * radVals[goodr] * drad)
+
+    return Yint
