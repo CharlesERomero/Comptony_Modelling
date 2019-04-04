@@ -7,7 +7,13 @@ import scipy.special as sps
 import get_data_info as gdi
 
 def log_profile(args,r_bins,radii,alphas=[],rintmax=[]):
+    """
+    r_bins and radii must be in the same units.
+    
+    This goes through and does the interpolation by hand.
+    I can totally use a quicker method...
 
+    """
     mybins=[0] + r_bins
     mybins[-1]=-1
     presprof=np.zeros(len(radii))
@@ -30,6 +36,8 @@ def log_profile(args,r_bins,radii,alphas=[],rintmax=[]):
 
     for idx, val in enumerate(r_bins):
         rin=mybins[idx]
+        if idx+1 == len(mybins):
+            import pdb;pdb.set_trace()
         rout=mybins[idx+1]
         epsnot=args[idx]
         #            print idx,r_bins,len(r_bins),alphas,aset

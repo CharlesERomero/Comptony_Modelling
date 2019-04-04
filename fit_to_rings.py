@@ -11,14 +11,17 @@ import PlotFittedProfile as PFP
 from astropy import wcs
 from astropy.io import fits
 from astropy.coordinates import Angle
+import image_filtering as imf
 
 def load_rings(option='M2',cluster='Zw3146',session=0,iteration=0):
 
     npydir = '/home/romero/Python/StandAlone/Comptony_Modelling/'
     sesstr=str(session)
     itestr=str(iteration)
+    geom      = [0,0,0,1,1,1,0,0]  # Spherical...base assumption for all.
 
     if cluster == 'Zw3146':
+        #nsrc    = 8
         nsrc    = 6
 
         if option == 'M2_ACT':
@@ -49,15 +52,33 @@ def load_rings(option='M2',cluster='Zw3146',session=0,iteration=0):
                 #edges = np.load(datadir+'Slices/AndIter/zwicky_3146_rings_edges_all_slices_rot0.0000_pass_1.npy')
 
                 thisdir=datadir+'IterRings/'
-                #midstr='_Corr_slope_manypass_TS_v0_51_Jan24_PdoCals_svd10_pass_'
-                midstr='_Corr_slope_10p7_TS_v0_51_Jan24_PdoCals_svd10_pass_'
-                #midstr='_Corr_slope_10p7_TS_v0_51_Jan24_PdoCals_svd10_cmsubbed_pass_'
-                #midstr='_Corr_slope_TS_v0_51_Jan24_PdoCals_svd10_pass_'
+                #midstr='_Corr_slope_manypass_TS_v0_51_Jan24_PdoCals_svd10_pass_' # 11.1 FWHM -> slightly too big.
+                #midstr='_Corr_slope_10p7_TS_v0_51_Jan24_PdoCals_svd10_pass_'  # Best overall so far??
+                #midstr='_Corr_slope_10p7_TS_v0_51_Jan24_PdoCals_svd10_cmsubbed_pass_' # Has CM subbed -> filters signal
+                #midstr='_Corr_slope_TS_v0_51_Jan24_PdoCals_svd10_pass_'   # OK, but SVD10 converges better
+
+                #midstr='_Corr_slope_10p7_10c_TS_v0_51_Jan24_PdoCals_svd10_pass_' # inner rings goes to 10"
+                #midstr='_Corr_slope_10p7_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_' # old edges, but all pt. srcs have 10.7 FWHM
+                #midstr='_CSlopeBeam_10p7_TS_v0_51_Jan24_PdoCals_svd10_pass_'
+                #midstr='_CSlopeBeam_10p7_10c_TS_v0_51_Jan24_PdoCals_svd10_pass_'
+                #midstr='_CSlopeBeam_10p7_10c_TS_v0_51_Jan24_PdoCals_svd10_pass_'
+                #midstr='_CSlopeBeam_10p7_XMMc_TS_v0_51_Jan24_PdoCals_svd10_pass_'
+                #midstr='_CSlopeBeam_10p7_8srcs_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'
+                #########################################################################################################
+                # Spherical model
+                midstr='_CSlopeBeam_10p7_6srcs_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'  # I think my best one so far...?
+                #########################################################################################################
+                #midstr='_CSlopeBeam_10p7_ellipt_6_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'
+                #geom      = [0,0,0.8,1,0.8,0.8944272,0,0]  # If elliptical
+                #########################################################################################################
+                #midstr='_CSlopeBeam_10p7_ellipt_6_SZ2Dc_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'
+                #geom      = [-1.96,-0.26,0.8,1,0.8,0.8944272,0,0]  # If elliptical, SZ2D
                 
                 curve = np.load(thisdir+'zwicky_3146_rings_curve'+midstr+itestr+'.npy')
                 deriv = np.load(thisdir+'zwicky_3146_rings_deriv'+midstr+itestr+'.npy')
                 edges = np.load(thisdir+'zwicky_3146_rings_edges'+midstr+itestr+'.npy')
                 trim  = 6
+                #trim  = 8  # When working with _8srcs_
             ######################################################################################
             else:
                 thisdir=datadir+'IterRings/'
@@ -169,9 +190,38 @@ def load_rings(option='M2',cluster='Zw3146',session=0,iteration=0):
         nsrc    = 1
         trim    = 1
 
+    if cluster == 'MACS0717':
+
+        thisdir='/home/data/MUSTANG2/AGBT17_Products/MACS0717/Minkasi/IterRings/'
+        nsrc=3
+        #midstr='_CSlopeBeam_10p7_ellipt_6_SZ2Dc_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'
+        midstr='_CSlopeBeam_10p7_3_TS_v0_51_16_Feb_2019_svd10_rfwhm_pass_'
+        #geom      = [-1.96,-0.26,0.8,1,0.8,0.8944272,0,0]  # If elliptical, SZ2D
+        #geom      = [0.0,0.0,0.0,1.0,1.0,1.0,0,0]  # If spherical
+
+        curve = np.load(thisdir+'M0717_rings_curve'+midstr+itestr+'.npy')
+        deriv = np.load(thisdir+'M0717_rings_deriv'+midstr+itestr+'.npy')
+        edges = np.load(thisdir+'M0717_rings_edges'+midstr+itestr+'.npy')
+        trim  = 3
+
+    if cluster == 'MACS1149':
+
+        nsrc=1
+        thisdir='/home/data/MUSTANG2/AGBT17_Products/MACS1149/Minkasi/IterRings/'
+        #midstr='_CSlopeBeam_10p7_ellipt_6_SZ2Dc_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'
+        midstr='_CSlopeBeam_10p7_1_TS_EaCMS_51_13_Mar_2019_svd10_rfwhm_pass_'
+        #geom      = [-1.96,-0.26,0.8,1,0.8,0.8944272,0,0]  # If elliptical, SZ2D
+        #geom      = [0.0,0.0,0.0,1.0,1.0,1.0,0,0]  # If spherical
+
+        curve = np.load(thisdir+'MACS1149_rings_curve'+midstr+itestr+'.npy')
+        deriv = np.load(thisdir+'MACS1149_rings_deriv'+midstr+itestr+'.npy')
+        edges = np.load(thisdir+'MACS1149_rings_edges'+midstr+itestr+'.npy')
+        trim  = 1
+
+
     print 'The shapes of curve, deriv, and edges are: ',curve.shape, deriv.shape, edges.shape
         
-    return curve,deriv,edges,trim,nsrc
+    return curve,deriv,edges,trim,nsrc,geom
 
 def get_data_cov_edges(incurve,inderiv,edges,trim=0,autotrim=False,slices=False,nslice=4,slicenum=0,
                        nsrc=6,fpause=True,ptsrcamps=False):
@@ -187,6 +237,7 @@ def get_data_cov_edges(incurve,inderiv,edges,trim=0,autotrim=False,slices=False,
 
         if ptsrcamps:
             data=data[-nsrc:]
+            print('Your point source amplitudes are: \n',data)
             return data
         else:
             
@@ -203,8 +254,8 @@ def get_data_cov_edges(incurve,inderiv,edges,trim=0,autotrim=False,slices=False,
                 #curve  = curve[:nsrc-trim,:nsrc-trim]
             else:
                 if trim == 0:
-                    print 'You selected to trim nothing, but you are not compiling slices. This is problematic.'
-                    import pdb;pdb.set_trace()
+                    print 'You selected to trim nothing, perhaps you are just testing things.'
+                    #import pdb;pdb.set_trace()
             
             if trim > 0:
                 data   = data[:-trim]
@@ -269,9 +320,9 @@ def get_data_cov_edges(incurve,inderiv,edges,trim=0,autotrim=False,slices=False,
     
     return gdata,gcurv,gedge
 
-def get_start_vals(mnlvl=3.0e-5,outdir=None,cluster='Zw3146',model='NP'):
+def get_start_vals(mnlvl=1.0e-5,outdir=None,cluster='Zw3146',model='NP'):
 
-    sz_vars, map_vars, bins, Pdl2y, geom = gdi.get_underlying_vars(cluster)
+    sz_vars, map_vars, bins, Pdl2y = gdi.get_underlying_vars(cluster)
     if type(outdir) != type(None):
         Pdlfilename = outdir+'MCMC_parameter_to_Pressure_Conversion.npy'
         np.save(Pdlfilename,Pdl2y.value)
@@ -284,8 +335,8 @@ def get_start_vals(mnlvl=3.0e-5,outdir=None,cluster='Zw3146',model='NP'):
     #pos = list(pos)
     if model == 'GNFW':
         #pos  = np.array([1.177,8.403,5.4905,0.3081,1.0510,mnlvl])
-        pos  = np.array([8.403,mnlvl])
-        #pos  = np.array([1.177,8.403,mnlvl])
+        #pos  = np.array([8.403,mnlvl])
+        pos  = np.array([1.177,8.403,mnlvl])
         bins = map_vars['thetas'] # These can just correspond to n_data points for the gNFW profiles
     if model == 'Beta':
         pos = np.asarray([pos[0]/Pdl2y.value,(map_vars['r500']/10.0).to('kpc').value,1.0,mnlvl])
@@ -294,38 +345,43 @@ def get_start_vals(mnlvl=3.0e-5,outdir=None,cluster='Zw3146',model='NP'):
         
     return pos,bins
 
-def get_model(pos,ppbins,edges,inst='MUSTANG2',mytype='NP',mycluster='Default',slopes=None):
+def get_model(pos,ppbins,edges,inst='MUSTANG2',mytype='NP',mycluster='Default',slopes=None,ySph=False,
+              geom=[0,0,0,1,1,1,0,0]):
 
-    yProf,alphas,yint = PLB.prof_from_pars_rads(pos,ppbins,retall=True,model=mytype,cluster=mycluster)
+    yProf,alphas,yint = PLB.prof_from_pars_rads(pos,ppbins,retall=True,model=mytype,cluster=mycluster,ySph=ySph,geom=geom)
     modProf = PLB.resample_prof(yProf,edges,inst=inst,slopes=slopes)
     #import pdb;pdb.set_trace()
 
     return modProf,alphas,yint
 
-def make_model_map(pos,ppbins,edges,map_vars,inst='MUSTANG2',mytype='NP',mycluster='Default',slopes=None,
-                   xymap=None,geom=[0,0,0,1,1,1,0,0]):
+def make_model_map(pos,ppbins,edges,map_vars,mapshape,inst='MUSTANG2',mytype='NP',mycluster='Default',slopes=None,
+                   ySph=False,xymap=None,geom=[0,0,0,1,1,1,0,0],fwhm=10.7,pixsize=2.0):
 
-    yProf,alphas,yint = PLB.prof_from_pars_rads(pos,ppbins,retall=True,model=mytype,cluster=mycluster)
+    yProf,alphas,yint = PLB.prof_from_pars_rads(pos,ppbins,retall=True,model=mytype,cluster=mycluster,ySph=ySph,geom=geom)
     tSZc,kSZc = PLB.get_conv_factors(instrument=inst)
-    mymap = grid_profile(map_vars["thetas"], yProf*tSZc, xymap, geoparams=geom)
-
-    return mymap
+    skymap    = grid_profile(map_vars["thetas"], yProf*tSZc, xymap, geoparams=geom)
+    sig2fwhm  = np.sqrt(8.0*np.log(2.0)) 
+    pix_sigma = fwhm/(pixsize*sig2fwhm)
+    skymap    = skymap.reshape(mapshape)
+    mymap     = scipy.ndimage.filters.gaussian_filter(skymap, pix_sigma)
+    #mymap     = mymap.ravel()
     
-    #modProf = PLB.resample_prof(yProf,edges,inst=inst,slopes=slopes)
-    #import pdb;pdb.set_trace()
+    return mymap.ravel()
 
-def loop_fit_profs(dataset='M2',version='-SVD10_Mar10_SlopeRedo-',cluster='Zw3146',model='NP',domnlvl=True,doemcee=False,session=0,
-                      nslice=0,ring_combine=False,slope=True,slices=False,npass=10,nsession=0,sstart=0,istart=1):
+def loop_fit_profs(dataset='M2',version='-SVD10_Apr3_ySph_CSB_6srcs_sph-',cluster='Zw3146',model='NP',domnlvl=True,doemcee=False,session=0,
+                   nslice=0,ring_combine=False,slope=True,slices=False,npass=10,nsession=0,sstart=0,istart=1,ySph=False,
+                   longrun=False,rfwhm=10.7):
 
     for jj in range(sstart,nsession+1):
         for kk in range(istart,npass+1):
             fit_prof_to_rings(dataset=dataset,version=version,cluster=cluster,model=model,domnlvl=True,doemcee=False,session=jj,
                               nslice=0,slicenum=0,ring_combine=False,slope=slope,slices=False,fpause=False,makemap=True,
-                              iteration=kk)
+                              iteration=kk,ySph=ySph,longrun=longrun,rfwhm=rfwhm)
 
 
-def fit_prof_to_rings(dataset='M2',version='-Mar6_v2-',cluster='Zw3146',model='NP',domnlvl=True,doemcee=False,session=0,
-                      nslice=8,slicenum=0,ring_combine=False,slope=False,slices=False,fpause=True,makemap=True,iteration=0):
+def fit_prof_to_rings(dataset='M2',version='-Mar29_rfwhm_6srcs_ell-',cluster='Zw3146',model='NP',domnlvl=True,doemcee=False,session=0,
+                      nslice=8,slicenum=0,ring_combine=False,slope=True,slices=False,fpause=True,makemap=True,iteration=1,ySph=False,
+                      longrun=False,rfwhm=10.7):
 
     version = model+version
     ### You might want "_Iter" to be "_Session" depending on what you are actually doing...
@@ -348,14 +404,14 @@ def fit_prof_to_rings(dataset='M2',version='-Mar6_v2-',cluster='Zw3146',model='N
     #    slices=True
     ### dataset can be either 'M2' or 'M2_ACT'
 
-    mymnlvl=3.0e-5 if domnlvl else 0.0
+    mymnlvl=1.0e-5 if domnlvl else 0.0
 
     slopes=None
     if ring_combine:
         gdata,gcurv,gedge      = combine_rings(version=version,cluster=cluster,nslice=nslice)
     else:
-        curve,deriv,edges,trim,nsrc = load_rings(option=dataset,cluster=cluster,session=session,iteration=iteration)
-        gdata,gcurv,gedge      = get_data_cov_edges(curve,deriv,edges,trim,slices=slices,nslice=nslice,slicenum=slicenum,
+        curve,deriv,edges,trim,nsrc,geom = load_rings(option=dataset,cluster=cluster,session=session,iteration=iteration)
+        gdata,gcurv,gedge      = get_data_cov_edges(curve,deriv,edges,trim=trim,slices=slices,nslice=nslice,slicenum=slicenum,
                                                     nsrc=6,fpause=fpause)
         if slope:
             #gdata,gcurv,gedge      = get_better_slope_rings(option=dataset,cluster=cluster,session=session)
@@ -364,10 +420,10 @@ def fit_prof_to_rings(dataset='M2',version='-Mar6_v2-',cluster='Zw3146',model='N
             print 'Your slopes are: ',slopes
             print '=============================================================='
         #else:
-        #    curve,deriv,edges,trim = load_rings(option=dataset,cluster=cluster,session=session)
-        #    gdata,gcurv,gedge      = get_data_cov_edges(curve,deriv,edges,trim,slices=slices,nslice=nslice,slicenum=slicenum,nsrc=6)
+        #    curve,deriv,edges,trim,nsrc,geom= load_rings(option=dataset,cluster=cluster,session=session)
+        #    gdata,gcurv,gedge      = get_data_cov_edges(curve,deriv,edges,trim=trim,slices=slices,nslice=nslice,slicenum=slicenum,nsrc=6)
     pos,bins          = get_start_vals(mnlvl=mymnlvl,outdir=outdir,cluster=cluster,model=model)
-    startval = pos*1.0
+    startval = pos.copy()     #pos*1.0
 
     nchain=1
 
@@ -376,21 +432,32 @@ def fit_prof_to_rings(dataset='M2',version='-Mar6_v2-',cluster='Zw3146',model='N
         doemcee = True
     
     if doemcee == True:
-        nchain= 2*(len(bins)+4)
+        nchain= 2*(len(pos)+4) 
+        print(nchain)
+        #import pdb;pdb.set_trace()
     
-    ndim = len(pos); nsteps = 100000/nchain; nburn = nsteps*nchain/200
+    ndim = len(pos); nsteps = 100000/nchain
+    #if model == 'GNFW':
+    #    nsteps /= 4
+    if longrun:
+        nsteps*= 3
+        version = version+'_long'
+    #nburn = nsteps*nchain/200
+    nburn = nsteps/20
 
     pr = cProfile.Profile()
     pr.enable()
 
     if doemcee == True:
-        sampler, t_mcmc, ConvTests = run_emcee(gdata,gcurv,pos,bins,gedge,nsteps=nsteps,nwalkers=nchain,ndim=ndim,
-                                               nburn=nburn,mytype=model,domnlvl=domnlvl,mycluster=cluster,slopes=slopes)
+        sampler, t_mcmc, ConvTests = run_emcee(gdata,gcurv,pos,bins,gedge,nsteps=nsteps,nwalkers=nchain,ndim=ndim,nburn=nburn,
+                                               mytype=model,domnlvl=domnlvl,mycluster=cluster,slopes=slopes,ySph=ySph)
     else:
-        sampler, t_mcmc, ConvTests = run_mymcmc(gdata,gcurv,pos,bins,gedge,nsteps=nsteps,nwalkers=nchain,ndim=ndim,
-                                                nburn=nburn,mytype=model,domnlvl=domnlvl,mycluster=cluster,slopes=slopes)
+        sampler, t_mcmc, ConvTests = run_mymcmc(gdata,gcurv,pos,bins,gedge,nsteps=nsteps,nwalkers=nchain,ndim=ndim,nburn=nburn,
+                                                mytype=model,domnlvl=domnlvl,mycluster=cluster,slopes=slopes,ySph=ySph)
         
     pr.disable()
+    #########################################################################
+    prename = dataset+'_'+cluster+'_'+version+'_'
     prof_out = outdir+'PythonProfilerResults_crmcmc.txt'
     sys.stdout = open(prof_out, 'w')
     pr.print_stats()
@@ -398,43 +465,46 @@ def fit_prof_to_rings(dataset='M2',version='-Mar6_v2-',cluster='Zw3146',model='N
 
     
     blobarr     = np.array(sampler.blobs)
+    stepname = prename+'_steps_when_fitting_to_rings.png'
+    PFP.plot_steps(sampler,outdir,stepname,burn_in=nburn)
 
     samples    = sampler.chain[:,nburn:, :].reshape((-1,ndim))
     solns      = np.array(map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]),zip(*np.percentile(samples, [16, 50, 84],axis=0))))
     goodY      = blobarr[nburn:,:,:].reshape((-1,1))
-    #import pdb;pdb.set_trace()
     #lessmnlvl  = solns[:-1,:]
     mybest     = solns[:,0]
     print "Best results - without the mean level ",mybest
-    bmodel,boutalphas,byint = get_model(mybest,bins,gedge,mytype=model,mycluster=cluster,slopes=slopes)
-    imodel,ioutalphas,iyint = get_model(startval,bins,gedge,mytype=model,mycluster=cluster,slopes=slopes)
+    #import pdb;pdb.set_trace()
+    bmodel,boutalphas,byint = get_model(mybest,bins,gedge,mytype=model,mycluster=cluster,slopes=slopes,ySph=ySph)
+    imodel,ioutalphas,iyint = get_model(startval,bins,gedge,mytype=model,mycluster=cluster,slopes=slopes,ySph=ySph)
     #pbins = bins
     #if model == 'Beta' or model == 'gNFW': pbins = map_vars['thetas']*180.0*3600.0/np.pi
     
-    prename = dataset+'_'+cluster+'_'+version+'_'
-    np.save(outdir+prename+'IntegratedYs.npy',goodY)
+    iYsave = outdir+prename+'IntegratedYsphs.npy' if ySph else outdir+prename+'IntegratedYcyls.npy'
+    np.save(iYsave,goodY)
     np.save(outdir+prename+'Samples.npy',samples)
     np.save(outdir+prename+'Solutions.npy',solns)
     np.save(outdir+prename+'Chain.npy',sampler.chain)
 
     #import pdb;pdb.set_trace()
 
-    sz_vars, map_vars, bins, Pdl2y, geom = gdi.get_underlying_vars(cluster)
-    arcsecs = bins[...,np.newaxis] * (u.rad).to('arcsec')
-    radsANDpres = np.hstack((arcsecs,solns[:-1,:]/Pdl2y))
-    pamphdr = 'Radius (arcsec), Pressure (keV cm**-3), Upper Uncertainty, Lower Uncertainty'
-    np.savetxt(outdir+prename+'Pressure_Amplitudes.txt',radsANDpres,header=pamphdr)
+    sz_vars, map_vars, bins, Pdl2y = gdi.get_underlying_vars(cluster)
+    if model == 'NP':
+        arcsecs = bins[...,np.newaxis] * (u.rad).to('arcsec')
+        radsANDpres = np.hstack((arcsecs,solns[:-1,:]/Pdl2y))
+        pamphdr = 'Radius (arcsec), Pressure (keV cm**-3), Upper Uncertainty, Lower Uncertainty'
+        np.savetxt(outdir+prename+'Pressure_Amplitudes.txt',radsANDpres,header=pamphdr)
     #np.save(outdir+'SamplerObject.npy',sampler,allow_pickle=True)
 
     #import pdb;pdb.set_trace()
 
-    stepname = prename+'_steps_when_fitting_to_rings.png'
+    #stepname = prename+'_steps_when_fitting_to_rings.png'
     presname = prename+'_fitted_pressure_profile_A10.png'
-    PFP.plot_steps(sampler,outdir,stepname,burn_in=nburn)
+    #PFP.plot_steps(sampler,outdir,stepname,burn_in=nburn)
     PFP.plot_pres_bins(solns,dataset,outdir,presname,cluster=cluster,
-                       IntegratedYs=goodY,overlay='a10',mymodel=model)
+                       IntegratedYs=goodY,overlay='a10',mymodel=model,ySph=ySph,geom=geom)
     barename = prename+'_fitted_pressure_profile_bare.png'
-    PFP.plot_pres_bins(solns,dataset,outdir,barename,cluster=cluster,IntegratedYs=goodY,overlay='None',mymodel=model,bare=True)
+    PFP.plot_pres_bins(solns,dataset,outdir,barename,cluster=cluster,IntegratedYs=goodY,overlay='None',mymodel=model,bare=True,ySph=ySph,geom=geom)
     profname = prename+'_fitted_brightness_profile.png'
     PFP.plot_surface_profs(bmodel,bins,gdata,gcurv,gedge,outdir,profname,cluster=cluster,mymodel=model,pinit=imodel,slopes=slopes)
     profname = prename+'_fitted_brightness_profile_bare.png'
@@ -442,7 +512,7 @@ def fit_prof_to_rings(dataset='M2',version='-Mar6_v2-',cluster='Zw3146',model='N
     if cluster == 'Zw3146':
         presname = prename+'_fitted_pressure_profile_XMM.png'
         PFP.plot_pres_bins(solns,dataset,outdir,presname,cluster=cluster,
-                           IntegratedYs=goodY,overlay='XMM',mymodel=model)
+                           IntegratedYs=goodY,overlay='XMM',mymodel=model,ySph=ySph,geom=geom)
 
     corrname = dataset+"_correlations_via_corner"+version+".png"
 
@@ -452,10 +522,10 @@ def fit_prof_to_rings(dataset='M2',version='-Mar6_v2-',cluster='Zw3146',model='N
     PFP.plot_autocorrs(sampler,outdir,prename+'Autocorrelations.png',burn_in=200)
 
     if makemap:
-        ptamps = get_data_cov_edges(curve,deriv,edges,trim,slices=slices,nslice=nslice,slicenum=slicenum,
+        ptamps = get_data_cov_edges(curve,deriv,edges,trim=trim,slices=slices,nslice=nslice,slicenum=slicenum,
                                                     nsrc=6,fpause=fpause,ptsrcamps=True)
-        make_fits_from_fits(cluster,pos=mybest,ppbins=bins,edges=gedge,version=version,
-                            dataset=dataset,inst='MUSTANG2',mytype=model,ptamps=ptamps)
+        make_fits_from_fits(cluster,pos=mybest,ppbins=bins,edges=gedge,version=version,dataset=dataset,
+                            inst='MUSTANG2',mytype=model,ptamps=ptamps,iteration=iteration,rfwhm=rfwhm,geom=geom)
     
     if fpause:
         import pdb;pdb.set_trace()
@@ -491,15 +561,16 @@ def replot_with_XMM():
 ################################################################################
     
 def run_emcee(data,curve,myargs,ppbins,edges,nsteps=2500,nwalkers=20,ndim=1,nburn=200,mytype='NP',
-              domnlvl=True,mycluster='Default',slopes=None):
+              domnlvl=True,mycluster='Default',slopes=None,ySph=False):
 
     if ndim < len(myargs): ndim  = len(myargs)
     if nburn < nsteps/10: nburn = nsteps/10
+    print('N dimensions: ',ndim,'N burn: ',nburn,'N steps: ',nsteps,'N walkers: ',nwalkers)
     
     def lnlike(pos):                          ### emcee_fitting_vars
 
         #import pdb;pdb.set_trace()
-        model,outalphas,yint = get_model(pos,ppbins,edges,mytype=mytype,mycluster=mycluster,slopes=slopes)
+        model,outalphas,yint = get_model(pos,ppbins,edges,mytype=mytype,mycluster=mycluster,slopes=slopes,ySph=ySph)
 
         #mnlvl=0
         mnlvl=pos[-1] if domnlvl else 0.0
@@ -549,6 +620,7 @@ def run_emcee(data,curve,myargs,ppbins,edges,nsteps=2500,nwalkers=20,ndim=1,nbur
             #print 'In LnProb, LogLike set to infinity'
             return -np.inf, [-1.0 for ybad in ycyl]
         lp = lnprior(pos,outalphas,ycyl)
+        #print(lp,likel,ycyl)
         #import pdb;pdb.set_trace()
         if not np.isfinite(lp):
             #print 'In LnProb, LogLike set to infinity'
@@ -562,15 +634,17 @@ def run_emcee(data,curve,myargs,ppbins,edges,nsteps=2500,nwalkers=20,ndim=1,nbur
     
     pos = [(myargs + np.random.randn(ndim) * myargs/1e3) for i in range(nwalkers)]
     proccheck = np.max([100,nsteps/50])  # Check in every 100 steps (iterations)
+    #proccheck = 100  # Check in every 100 steps (iterations)
     fts = int(np.ceil(nsteps*1.0/proccheck))
     imo = int(ndim+1)
+    print('Checking every ',proccheck,' steps')
     #import pdb;pdb.set_trace()
     gw2010 = np.zeros((fts,imo))
     newmet = np.zeros((fts,imo))
     dt0 = datetime.datetime.now()
     
     for i, result in enumerate(sampler.sample(pos, iterations= nsteps)):
-    #    print i
+        #print(i)
         if (i+1) % proccheck == 0:
             cind     = int((i+1) / proccheck)-1
             for jjj in range(ndim):
@@ -586,8 +660,10 @@ def run_emcee(data,curve,myargs,ppbins,edges,nsteps=2500,nwalkers=20,ndim=1,nbur
             t_total  = t_so_far / perdone
             t_remain = (t_total * (1.0 - perdone) * u.s).to("min")
             t_finish = dt0 + datetime.timedelta(seconds=t_total)
-            print "{0:5.1%}".format(perdone)+' done; >>> Estimated Time Remaining: ',\
-                t_remain.value,' minutes; for a finish at: ',t_finish.strftime("%Y-%m-%d %H:%M:%S")
+            print("{0:5.1%}".format(perdone)+' done; >>> Estimated Time Remaining: ',
+                  t_remain.value,' minutes; for a finish at: ',t_finish.strftime("%Y-%m-%d %H:%M:%S"))
+            #print(pos)
+            #import pdb;pdb.set_trace()
             #print "Average time per step so far: ", "{:5.1f}".format(t_so_far/(i+1.0))," seconds."
             
     myabscissa = np.arange(np.ceil(nsteps*1.0/ proccheck))*proccheck
@@ -614,7 +690,7 @@ def run_emcee(data,curve,myargs,ppbins,edges,nsteps=2500,nwalkers=20,ndim=1,nbur
     return sampler, t_mcmc, ConvTests
 
 def run_mymcmc(data,curve,myargs,ppbins,edges,nsteps=2500,nwalkers=1,ndim=1,nburn=200,mytype='NP',
-               domnlvl=True,mycluster='Default',slopes=None):
+               domnlvl=True,mycluster='Default',slopes=None,ySph=False):
 
     if ndim < len(myargs): ndim  = len(myargs)
     if nburn < nsteps/10: nburn = nsteps/10
@@ -628,7 +704,7 @@ def run_mymcmc(data,curve,myargs,ppbins,edges,nsteps=2500,nwalkers=1,ndim=1,nbur
     def lnlike(pos):                          ### emcee_fitting_vars
 
         #import pdb;pdb.set_trace()
-        model,outalphas,yint = get_model(pos,ppbins,edges,mytype=mytype,mycluster=mycluster,slopes=slopes)
+        model,outalphas,yint = get_model(pos,ppbins,edges,mytype=mytype,mycluster=mycluster,slopes=slopes,ySph=ySph)
 
         #mnlvl=0
         mnlvl=pos[-1] if domnlvl else 0.0
@@ -761,8 +837,8 @@ def combine_rings(dataset='M2',version='-Feb5_IRings_v2-',cluster='Zw3146',model
         outdir = outdir+'Iter/'
 
     #nslice=8
-    gpdir='/home/data/MUSTANG2/AGBT17_Products/Zw3146/Minkasi/GaussPars/'
-    gpars=np.load(gpdir+'zwicky_6src_gaussp_3Feb2019_minchi_all_v2.npy')
+    gpfile = gpfile_by_clus(cluster)
+    gpars=np.load(gpfile)
     x    = gpars[0::4]*np.cos(gpars[1::4])
     y    = gpars[1::4]
     xx   = (x[0] - x)*3600*180/np.pi
@@ -771,7 +847,7 @@ def combine_rings(dataset='M2',version='-Feb5_IRings_v2-',cluster='Zw3146',model
     tt   = np.arctan2(yy,xx)
     tdeg = tt*180.0/np.pi
     tsli = np.floor((tt+np.pi)*nslice/(2.0*np.pi))+1
-    curve,deriv,edges,trim,nsrc = load_rings(option=dataset,cluster=cluster,session=session,iteration=iteration)
+    curve,deriv,edges,trim,nsrc,geom = load_rings(option=dataset,cluster=cluster,session=session,iteration=iteration)
     npar = ( len(edges)-1 )
     nsrc = 6
     lhs  = np.zeros((npar+nsrc,npar+nsrc))
@@ -827,7 +903,7 @@ def get_better_slope_rings(option='M2',cluster='Zw3146',session=0,slices=False,n
     
     #slices=False
     mypass=session
-    curve,deriv,edges,trim,nsrc = load_rings(option=option,cluster=cluster,session=mypass,iteration=iteration)
+    curve,deriv,edges,trim,nsrc,geom = load_rings(option=option,cluster=cluster,session=mypass,iteration=iteration)
     gdata,gcurv,gedge      = get_data_cov_edges(curve,deriv,edges,trim=trim,slices=slices,nslice=nslice,slicenum=slicenum,nsrc=nsrc)
 
     slopes = get_slope(option=option,cluster=cluster,mypass=mypass,slices=slices,nslice=nslice,slicenum=slicenum,trim=trim,nsrc=nsrc)
@@ -845,7 +921,7 @@ def get_slope(option='M2',cluster='Zw3146',mypass=0,slices=False,nslice=0,slicen
 
     mytrim = trim
     if mypass > 1:
-        pcurve,pderiv,pedges,ptrim,pnsrc = load_rings(option=option,cluster=cluster,iteration=mypass-1,session=session)
+        pcurve,pderiv,pedges,ptrim,pnsrc,geom = load_rings(option=option,cluster=cluster,iteration=mypass-1,session=session)
         pdata,pcurv,pedge      = get_data_cov_edges(pcurve,pderiv,pedges,trim=mytrim,slices=slices,nslice=nslice,slicenum=slicenum,
                                                     nsrc=nsrc,fpause=fpause)
         myvals = pdata - np.max(pdata)
@@ -856,6 +932,7 @@ def get_slope(option='M2',cluster='Zw3146',mypass=0,slices=False,nslice=0,slicen
             slopes = slopes[:nsrc+1-trim]/myvals[:nsrc-trim]
             print('All good with the slopes array.')
         else:
+            slopes = slopes/myvals[:-1]
             slopes = np.append(slopes,[0])
             print('Had to add a zero onto the slopes array.')
     else:
@@ -863,33 +940,41 @@ def get_slope(option='M2',cluster='Zw3146',mypass=0,slices=False,nslice=0,slicen
 
     return slopes
 
-def get_map_file(cluster='Zw3146',SNR=False):
+def get_map_file(cluster='Zw3146',SNR=False,Noise=False,iteration=5):
 
     m2dir='/home/data/MUSTANG2/'
     if cluster == 'Zw3146':
       mapdir=m2dir+'AGBT17_Products/Zw3146/Minkasi/Maps/'
       if SNR:
-          mfile = mapdir+'Zw3146_Minkasi_Struct_SNR_Pass5_Feb17.fits'
-          mfile = mapdir+'Zw3146_Minkasi_SVD10_Struct_SNR_Pass10_Mar10.fits'
+          #mfile = mapdir+'Zw3146_Minkasi_Struct_SNR_Pass5_Feb17.fits'
+          #mfile = mapdir+'Zw3146_Minkasi_SVD10_Struct_SNR_Pass10_Mar10.fits'
+          mfile = mapdir+'Zw3146_Minkasi_SVD10_Rings_Struct_SNR_Pass'+str(iteration)+'_Mar10.fits'
+      elif Noise:
+          #mfile = mapdir+'Zw3146_Minkasi_Struct_Noise_Pass5_Feb17.fits'
+          #mfile = mapdir+'Zw3146_Minkasi_SVD10_Struct_Noise_Pass10_Mar10.fits'
+          mfile = mapdir+'Zw3146_Minkasi_SVD10_Rings_Struct_Noise_Pass'+str(iteration)+'_Mar10.fits'          
       else:
           #mfile = mapdir+'Zw3146_Minkasi_Struct_Map_Pass5_Feb17.fits'
-          mfile = mapdir+'Zw3146_Minkasi_SVD10_Struct_Map_Pass10_Mar10.fits'
+          #mfile = mapdir+'Zw3146_Minkasi_SVD10_Struct_Map_Pass10_Mar10.fits'
+          mfile = mapdir+'Zw3146_Minkasi_SVD10_Rings_Struct_Map_Pass'+str(iteration)+'_Mar10.fits'
 
     return mfile
 
-def get_map_products(cluster='Zw3146'):
+def get_map_products(cluster='Zw3146',iteration=1):
 
-    sz_vars, map_vars, bins, Pdl2y, geom = gdi.get_underlying_vars(cluster)
+    sz_vars, map_vars, bins, Pdl2y = gdi.get_underlying_vars(cluster)
 
-    mfile = get_map_file(cluster=cluster,SNR=False)
+    mfile = get_map_file(cluster=cluster,SNR=False,iteration=iteration)
     data_map, header = fits.getdata(mfile, header=True)
-    mfile = get_map_file(cluster=cluster,SNR=True)
+    mfile = get_map_file(cluster=cluster,SNR=True,iteration=iteration)
     rms_map, rmshdr = fits.getdata(mfile, header=True,ext=1)
+    nfile = get_map_file(cluster=cluster,Noise=True,iteration=iteration)
+    noise_map, noihdr = fits.getdata(nfile, header=True,ext=0)
 
     ra0  = map_vars["racen"].to('deg').value
     dec0 = map_vars["deccen"].to('deg').value
     w = wcs.WCS(header)
-    mypix = w.wcs_world2pix(ra0,dec0,1)
+    mypix = w.wcs_world2pix(ra0,dec0,0)  # Had been set to 1, but now I want to start at zero.
     print('----------------------------------------------------')
     print('Pixel centroid is: ',mypix)
     print('----------------------------------------------------')
@@ -901,7 +986,7 @@ def get_map_products(cluster='Zw3146'):
     #xymap = get_xymap(data_map,pixs,mypix[0],mypix[1])
     xymap = get_xymap(data_map,pixs,mypix[0],mypix[1])
 
-    return data_map, header, rms_map, rmshdr, xymap, bins, map_vars
+    return data_map, header, rms_map, rmshdr, xymap, bins, map_vars, noise_map
     
 def get_xymap(map,pixsize,xcentre=[],ycentre=[],oned=True):
     """
@@ -997,17 +1082,52 @@ def rot_trans_grid(x,y,xs,ys,rot_rad):
 
     return xxyy[0,:],xxyy[1,:]
 
-def make_hdu(modelmap,modelhdr,datamap=None,rmsmap=None,cluster='Zw3146',smooth=10.0,
-             fullpath=None):
+def make_hdu(modelmap,modelhdr,ptmap=None,datamap=None,rmsmap=None,nmap=None,cluster='Zw3146',mnlvl=0,
+             smooth=10.0,fullpath=None,geom=[0,0,0,1,1,1,0,0],units='K_RJ'):
 
     hdu0 = fits.PrimaryHDU(modelmap,header=modelhdr)
-    hdu0.header.append(("Title","Model Map"))
+    hdu0.header.append(("Title","Cluster Model"))
     hdu0.header.append(("Target",cluster))          
-    hdu0.name = 'Model_Map'
+    hdu0.header.append(("Xoffset",geom[0],'X (arcsecond) from reference centroid'))          
+    hdu0.header.append(("Yoffset",geom[1],'Y (arcsecond) from reference centroid'))          
+    hdu0.header.append(("Rot_Ang",geom[2],'Rotation, in radians'))          
+    hdu0.header.append(("Major",geom[3],'Major (X) axis scaling'))          
+    hdu0.header.append(("Minor",geom[4],'Minor (Y) axis scaling'))          
+    hdu0.header.append(("LOS",geom[5],'Line of sight (Z) axis scaling'))          
+    hdu0.header.append(("Xi",geom[6],'Taper scaling (power law)'))          
+    hdu0.header.append(("Opening",geom[7],'Opening angle (radians)'))          
+    hdu0.header.append(("MnLvl",mnlvl,'Mean Level (make units), not included here.'))          
+    hdu0.header.append(("Units",units,'Map Units'))          
+    hdu0.name = 'Cluster_Model'
     myhdu = [hdu0]
     pixsize  = 2.0 # Need to not have this hard-coded
     sig2fwhm = np.sqrt(8.0*np.log(2.0)) 
     
+    if not(ptmap is None):
+        hdu5 = fits.ImageHDU(data=ptmap,header=modelhdr.copy())
+        #hdu5.header = modelhdr.copy()
+        hdu5.name = 'PtSrcMap'
+        hdu5.header.append(("Title","Pt Src Models"))
+        hdu5.header.append(("Target",cluster))          
+        hdu5.header.append(("XTENSION","What Mate"))
+        hdu5.header.append(("SIMPLE","T")) 
+        hdu5.header.append(("Units",units,'Map Units'))          
+        hdu5.verify('fix')
+
+        cmodmap = ptmap + modelmap
+        
+        hdu6 = fits.ImageHDU(data=cmodmap,header=modelhdr.copy())
+        #hdu6.header = modelhdr.copy()
+        hdu6.name = 'AllModelMap'
+        hdu6.header.append(("Title","All Models"))
+        hdu6.header.append(("Target",cluster))          
+        hdu6.header.append(("XTENSION","What Mate"))
+        hdu6.header.append(("SIMPLE","T")) 
+        hdu6.header.append(("Units",units,'Map Units'))          
+        hdu6.verify('fix')
+        myhdu.extend([hdu5,hdu6])
+        
+
     if not(datamap is None):
         hdu1 = fits.ImageHDU(data=datamap,header=modelhdr.copy())
         #hdu1.header = modelhdr.copy()
@@ -1016,9 +1136,11 @@ def make_hdu(modelmap,modelhdr,datamap=None,rmsmap=None,cluster='Zw3146',smooth=
         hdu1.header.append(("Target",cluster))          
         hdu1.header.append(("XTENSION","What Mate"))
         hdu1.header.append(("SIMPLE","T")) 
+        hdu1.header.append(("MNLVL",mnlvl,'Assumed/fitted mean level')) 
+        hdu1.header.append(("Units",units,'Map Units'))          
         hdu1.verify('fix')
 
-        residual = datamap - modelmap
+        residual = datamap - modelmap - ptmap - mnlvl
         hdu2 = fits.ImageHDU(data=residual,header=modelhdr.copy())
         #hdu2.header = modelhdr.copy()
         hdu2.name = 'Residual'
@@ -1026,6 +1148,7 @@ def make_hdu(modelmap,modelhdr,datamap=None,rmsmap=None,cluster='Zw3146',smooth=
         hdu2.header.append(("Target",cluster))          
         hdu2.header.append(("XTENSION","What Mate"))
         hdu2.header.append(("SIMPLE","T")) 
+        hdu2.header.append(("Units",units,'Map Units'))          
         hdu2.verify('fix')
         
         myhdu.extend([hdu1,hdu2])
@@ -1033,7 +1156,7 @@ def make_hdu(modelmap,modelhdr,datamap=None,rmsmap=None,cluster='Zw3146',smooth=
         if not(rmsmap is None):
             pix_sigma = smooth/(pixsize*sig2fwhm)
             smres = scipy.ndimage.filters.gaussian_filter(residual, pix_sigma)
-            #smres = residual*1.0
+            #smres = residual*1.0 # It's already smoothed...
             nzi = (rmsmap > 0)
             rsnr      = smres*0.0
             rsnr[nzi] = smres[nzi] / rmsmap[nzi]
@@ -1044,6 +1167,7 @@ def make_hdu(modelmap,modelhdr,datamap=None,rmsmap=None,cluster='Zw3146',smooth=
             hdu3.header.append(("Target",cluster))          
             hdu3.header.append(("XTENSION","What Mate"))
             hdu3.header.append(("SIMPLE","T")) 
+            hdu3.header.append(("Units",'SNR','Map Units'))          
             hdu3.verify('fix')
             myhdu.append(hdu3)
             
@@ -1055,8 +1179,21 @@ def make_hdu(modelmap,modelhdr,datamap=None,rmsmap=None,cluster='Zw3146',smooth=
         hdu4.header.append(("Target",cluster))          
         hdu4.header.append(("XTENSION","What Mate"))
         hdu4.header.append(("SIMPLE","T")) 
+        hdu4.header.append(("Units",units,'Map Units'))          
         hdu4.verify('fix')
         myhdu.append(hdu4)
+
+    if not(nmap is None):
+        hdu7 = fits.ImageHDU(data=nmap,header=modelhdr.copy())
+        #hdu7.header = modelhdr.copy()
+        hdu7.name = 'NoiseMap'
+        hdu7.header.append(("Title","Noise Map"))
+        hdu7.header.append(("Target",cluster))          
+        hdu7.header.append(("XTENSION","What Mate"))
+        hdu7.header.append(("SIMPLE","T")) 
+        hdu7.header.append(("Units",units,'Map Units'))          
+        hdu7.verify('fix')
+        myhdu.append(hdu7)
 
     if not(fullpath is None):
         #import pdb;pdb.set_trace()
@@ -1065,13 +1202,15 @@ def make_hdu(modelmap,modelhdr,datamap=None,rmsmap=None,cluster='Zw3146',smooth=
 
     return myhdu
 
-def make_fits_from_fits(cluster,pos=None,ppbins=None,edges=None,version='-SVD10_Mar10_Trim6-',
-                        dataset='M2',inst='MUSTANG2',mytype='NP',session=1,domnlvl=True,ptamps=None):
+def make_fits_from_fits(cluster,pos=None,ppbins=None,edges=None,version='-SVD10_Mar13_Trim6-',
+                        dataset='M2',inst='MUSTANG2',mytype='NP',session=1,domnlvl=True,ptamps=None,
+                        iteration=1,m2fwhm=10.7,rfwhm=0.0,geom=[0,0,0,1,1,1,0,0]):
     
     outdir = '/home/romero/Results_Python/Rings/'+cluster+'/Iter/'
-    version = mytype+version+'Iter'+str(session)
+    version = mytype+version  #+'Iter'+str(session)
     prename = dataset+'_'+cluster+'_'+version+'_'
-    inmap,inhdr,rmsmap,rmshdr, xymap, bins,map_vars = get_map_products(cluster='Zw3146')
+    inmap,inhdr,rmsmap,rmshdr, xymap, bins,map_vars, noisemap = get_map_products(cluster='Zw3146',iteration=iteration)
+    mapshape = inmap.shape
     if pos is None:
         solns = np.load(outdir+prename+'Solutions.npy') # Or something like this.
         pos   = solns[:,0]
@@ -1081,31 +1220,33 @@ def make_fits_from_fits(cluster,pos=None,ppbins=None,edges=None,version='-SVD10_
     #print xymap.shape
     #import pdb;pdb.set_trace()
         
-    modelmap = make_model_map(pos,ppbins,edges,map_vars,inst=inst,mytype=mytype,mycluster=cluster,slopes=None,
-                   xymap=xymap)
+    modelmap = make_model_map(pos,ppbins,edges,map_vars,mapshape,inst=inst,mytype=mytype,mycluster=cluster,slopes=None,
+                              xymap=xymap,geom=geom)
 
     if not (ptamps is None):
-        ptmap = make_ptsrc_map(ptamps,xymap,inhdr)
-        modelmap += ptmap
+        ptmap = make_ptsrc_map(cluster,ptamps,xymap,inhdr,rfwhm=rfwhm)
+        ptmap  = ptmap.reshape(inmap.shape)
+        #modelmap += ptmap
     
     mnlvl=pos[-1] if domnlvl else 0.0
     print mnlvl
     
     modelmap  = modelmap.reshape(inmap.shape)
-    pix_fwhm  = 11.1/2.0
-    sig2fwhm  = np.sqrt(8.0*np.log(2.0))
-    pix_sigma = pix_fwhm/sig2fwhm
-    smoothedmodel = scipy.ndimage.filters.gaussian_filter(modelmap, pix_sigma) + mnlvl
+    ### Already done...
+    #pix_fwhm  = m2fwhm/2.0     # For Zwicky 3146, the FWHM was 10.7
+    #sig2fwhm  = np.sqrt(8.0*np.log(2.0))
+    #pix_sigma = pix_fwhm/sig2fwhm
+    #smoothedmodel = scipy.ndimage.filters.gaussian_filter(modelmap, pix_sigma) + mnlvl
 
     fullpath = outdir+prename+'Residual.fits'
-    myhdu = make_hdu(modelmap,inhdr,datamap=inmap,rmsmap=rmsmap,cluster=cluster,smooth=10.0,fullpath=fullpath)
+    myhdu = make_hdu(modelmap,inhdr,ptmap=ptmap,datamap=inmap,rmsmap=rmsmap,nmap=noisemap,cluster=cluster,mnlvl=mnlvl,
+                     smooth=10.0,fullpath=fullpath,geom=geom)
 
 
-def make_ptsrc_map(ptamps,xymap,header,gpfile=None,pixs=2.0):
+def make_ptsrc_map(cluster,ptamps,xymap,header,gpfile=None,pixs=2.0,rfwhm=0.0):
 
     if gpfile is None:
-        gpdir = '/home/data/MUSTANG2/AGBT17_Products/Zw3146/Minkasi/GaussPars/'
-        gpfile = gpdir+'zwicky_6src_gaussp_3Feb2019_minchi_all_v2.npy'
+        gpfile = gpfile_by_clus(cluster)
         
     gps    = np.load(gpfile)
         
@@ -1119,6 +1260,8 @@ def make_ptsrc_map(ptamps,xymap,header,gpfile=None,pixs=2.0):
     sigma    = gps[6::4] * 180.0 / np.pi * 3600.0
     sig2fwhm = np.sqrt(8.0*np.log(2))
     fwhm     = sigma*sig2fwhm
+    if rfwhm > 0:
+        sigma = np.ones(len(sigma))*rfwhm/sig2fwhm
     #print(fwhm)
     
     #amp    = gps[3::4]
@@ -1173,3 +1316,149 @@ def astro_from_hdr(hdr):
     ras  = ras*u.deg; decs = decs*u.deg 
     
     return ras, decs, pixs
+
+def just_print_soln(dataset='M2',version='-Mar14_v2-',cluster='Zw3146',model='NP',domnlvl=True,doemcee=False,session=0,
+                    nslice=8,slicenum=0,ring_combine=False,slope=False,slices=False,fpause=False,makemap=True,iteration=0,ySph=False):
+
+    version = model+version
+    ### You might want "_Iter" to be "_Session" depending on what you are actually doing...
+    outdir = '/home/romero/Results_Python/Rings/'+cluster+'/'
+    if slicenum > 0:
+        outdir = outdir+'Slices/'
+    if session > 0:
+        version = version+'Session'+str(session)+'-'
+        outdir = outdir+'BySession/'
+    if iteration > 0:
+        outdir = outdir+'Iter/'
+        version = version+'Iter'+str(iteration)
+        
+    if slicenum > 0:
+        #session=slicenum
+        version = version+'Slice'+str(slicenum)
+        slices=True
+    #if nslice > 0:
+    #    version = version+'Slice'+str(slicenum+1)
+    #    slices=True
+    ### dataset can be either 'M2' or 'M2_ACT'
+
+    mymnlvl=3.0e-5 if domnlvl else 0.0
+
+    slopes=None
+    if ring_combine:
+        gdata,gcurv,gedge      = combine_rings(version=version,cluster=cluster,nslice=nslice)
+    else:
+        curve,deriv,edges,trim,nsrc,geom = load_rings(option=dataset,cluster=cluster,session=session,iteration=iteration)
+        #gdata,gcurv,gedge      = get_data_cov_edges(curve,deriv,edges,trim=0,slices=slices,nslice=nslice,slicenum=slicenum,
+        #                                            nsrc=0,fpause=fpause)
+        gdata,gcurv,gedge      = get_data_cov_edges(curve,deriv,edges,trim=10,slices=slices,nslice=nslice,slicenum=slicenum,
+                                                    nsrc=6,fpause=False,ptsrcamps=True)
+        print(gdata)
+    
+def map_minus_rings(dataset='M2',version='-Apr_EllRings_5c-',cluster='Zw3146',model='NP',domnlvl=False,doemcee=False,session=0,
+                    nslice=8,slicenum=0,ring_combine=False,slope=False,slices=False,fpause=False,makemap=True,iteration=1,
+                    ptamps=None,fwhm=10.7,pixsize=2.0,rfwhm=0.0):
+
+    version = model+version
+    ### You might want "_Iter" to be "_Session" depending on what you are actually doing...
+    outdir = '/home/romero/Results_Python/Rings/'+cluster+'/'
+    if slicenum > 0:
+        outdir = outdir+'Slices/'
+    if session > 0:
+        version = version+'Session'+str(session)+'-'
+        outdir = outdir+'BySession/'
+    if iteration > 0:
+        outdir = outdir+'Iter/'
+        version = version+'Iter'+str(iteration)
+        
+    if slicenum > 0:
+        #session=slicenum
+        version = version+'Slice'+str(slicenum)
+        slices=True
+    #if nslice > 0:
+    #    version = version+'Slice'+str(slicenum+1)
+    #    slices=True
+    ### dataset can be either 'M2' or 'M2_ACT'
+
+    inmap,inhdr,rmsmap,rmshdr, xymap, bins,map_vars, noisemap = get_map_products(cluster='Zw3146',iteration=iteration)
+    sz_vars, map_vars, bins, Pdl2y = gdi.get_underlying_vars(cluster)
+
+    mymnlvl=1.0e-7 if domnlvl else 0.0
+
+    slopes=None
+    if ring_combine:
+        gdata,gcurv,gedge      = combine_rings(version=version,cluster=cluster,nslice=nslice)
+    else:
+        curve,deriv,edges,trim,nsrc,geom = load_rings(option=dataset,cluster=cluster,session=session,iteration=iteration)
+        gdata,gcurv,gedge      = get_data_cov_edges(curve,deriv,edges,trim=trim,slices=slices,nslice=nslice,slicenum=slicenum,
+                                                    nsrc=nsrc,fpause=fpause)
+        if slope:
+            #gdata,gcurv,gedge      = get_better_slope_rings(option=dataset,cluster=cluster,session=session)
+            slopes = get_slope(option=dataset,cluster=cluster,mypass=iteration,slices=slices,gedge=gedge,trim=trim,
+                               nsrc=nsrc,fpause=fpause,session=session)
+            print 'Your slopes are: ',slopes
+            print '=============================================================='
+
+    nrings    = len(gedge)-1
+    if slopes is None:
+        slopes = np.zeros((nrings))
+    edgy_rads = gedge * np.pi / (180.0*3600.0)
+    yProf   = np.zeros(map_vars['thetas'].shape)
+    for i in range(nrings):
+        gRads1 = (map_vars['thetas'] >=  edgy_rads[i]) # Good radii (condition 1)
+        gRads2 = (map_vars['thetas'] < edgy_rads[i+1]) # Good radii (condition 2)
+        gRads  = [gRad1 and gRad2 for gRad1,gRad2 in zip(gRads1,gRads2)]
+        myrads = map_vars['thetas'][gRads]
+        a      = 1.0 - slopes[i]*(myrads-edgy_rads[i]) * (3600.0*180.0/np.pi)
+        print(i,slopes[i]*3600*180/np.pi,np.min(a),np.max(a),np.max(myrads-edgy_rads[i]))
+        #import pdb;pdb.set_trace()
+        yProf[gRads] = gdata[i]*a
+    skymap    = grid_profile(map_vars["thetas"], yProf, xymap, geoparams=geom)
+    skymap    = skymap.reshape(inmap.shape)
+    sig2fwhm  = np.sqrt(8.0*np.log(2.0)) 
+    pix_sigma = fwhm/(pixsize*sig2fwhm)
+    #pix_sigma = fwhm/(sig2fwhm)
+    #mymap     = scipy.ndimage.filters.gaussian_filter(skymap, pix_sigma)
+    #import pdb;pdb.set_trace()
+    mymap     = imf.fourier_filtering_2d(skymap,'gauss',fwhm/pixsize)
+    modelmap  = mymap.flatten()
+    #modelmap  = skymap.flatten()
+    
+    ptamps = get_data_cov_edges(curve,deriv,edges,trim=trim,slices=slices,nslice=nslice,slicenum=slicenum,
+                                nsrc=nsrc,fpause=fpause,ptsrcamps=True)
+    print(ptamps)
+    #import pdb;pdb.set_trace()
+    
+    if not (ptamps is None):
+        ptmap = make_ptsrc_map(cluster,ptamps,xymap,inhdr,rfwhm=rfwhm)
+        ptmap  = ptmap.reshape(inmap.shape)
+        #import pdb;pdb.set_trace()
+        
+    #mnlvl=pos[-1] if domnlvl else 0.0
+    #print mnlvl
+    
+    modelmap  = modelmap.reshape(inmap.shape)
+    #pix_fwhm  = m2fwhm/2.0     # For Zwicky 3146, the FWHM was 10.7
+    #sig2fwhm  = np.sqrt(8.0*np.log(2.0))
+    #pix_sigma = pix_fwhm/sig2fwhm
+    #smoothedmodel = scipy.ndimage.filters.gaussian_filter(modelmap, pix_sigma) + mnlvl
+    
+    prename = dataset+'_'+cluster+'_'+version+'_'
+
+    fullpath = outdir+prename+'DataMinusRings.fits'
+    myhdu = make_hdu(modelmap,inhdr,ptmap=ptmap,datamap=inmap,rmsmap=rmsmap,cluster=cluster,mnlvl=mnlvl,
+                     smooth=10.0,fullpath=fullpath,geom=geom)
+
+def gpfile_by_clus(cluster):
+
+    if cluster == 'Zw3146':
+        gpdir='/home/data/MUSTANG2/AGBT17_Products/Zw3146/Minkasi/GaussPars/'
+        gpfile = gpdir+'zwicky_6src_gaussp_3Feb2019_minchi_all_v2.npy'
+        #gpfile = gpdir+'zwicky_8src_gaussp_25Mar2019_minchi_all_v1.npy'
+    if cluster == 'MACS0717':
+        gpdir='/home/data/MUSTANG2/AGBT17_Products/MACS0717/Minkasi/GaussPars/'
+        gpfile=gpdir+'M0717_3src_gaussp_2019-04-01_minchi_all_v1.npy'
+    if cluster == 'MACS1149':
+        gpdir='/home/data/MUSTANG2/AGBT17_Products/MACS1149/Minkasi/GaussPars/'
+        gpfile=gpdir+'MACS1149_1src_gaussp_2019-04-01_minchi_all_v0.npy'
+
+    return gpfile

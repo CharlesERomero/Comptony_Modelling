@@ -66,9 +66,10 @@ def plot_steps(sampler,outdir,filename,burn_in=200):
     plt.close()
 
 def plot_pres_bins(solns,dataset,outdir,filename,cluster='Zw3146',runits='arcseconds',punits=r'keV / cm$^{-3}$',
-                   IntegratedYs=None,overlay='None',mymodel='NP',bare=False,solns2=None,rads2=None,notes2=None):
+                   IntegratedYs=None,overlay='None',mymodel='NP',bare=False,solns2=None,rads2=None,notes2=None,
+                   ySph=False,geom=[0,0,0,1,1,1,0,0]):
 
-    sz_vars, map_vars, bins, Pdl2y, geom = gdi.get_underlying_vars(cluster)
+    sz_vars, map_vars, bins, Pdl2y = gdi.get_underlying_vars(cluster)
     fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = gdi.inst_params('MUSTANG2')
     rin = fwhm.to("arcsec").value / 2.0; rout = FoV.to("arcsec").value / 2.0; axcol = 'r'
     ################################################################################
@@ -81,13 +82,14 @@ def plot_pres_bins(solns,dataset,outdir,filename,cluster='Zw3146',runits='arcsec
     myfig = plt.figure(1,figsize=(5,3),dpi=300)
     plt.clf()
     ax = myfig.add_subplot(111)
+    ax.axvline(rinasec,color='k', linestyle ="dotted")    # "original" R500
 
     radii =  np.logspace(np.log10(rin / 10.0), np.log10(rout*10.0),200)
     if type(IntegratedYs) != type(None):
         #print IntegratedYs.shape
         #import pdb;pdb.set_trace()
 
-        rfromy,rinasec,m5_pm,thisR500,rlas,rhas,r500,m500,p500 = get_pressure_plot_addons(IntegratedYs,map_vars)
+        rfromy,rinasec,m5_pm,thisR500,rlas,rhas,r500,m500,p500 = get_pressure_plot_addons(IntegratedYs,map_vars,ySph=ySph)
         #print p500
         #print map_vars['p500'].to('keV cm**-3')
         #print r500
@@ -104,6 +106,9 @@ def plot_pres_bins(solns,dataset,outdir,filename,cluster='Zw3146',runits='arcsec
         mylabel = "Deprojected profile" if solns2 is None else "From Minkasi"
         ax.errorbar(arc_rads,pressure,yerr=errs,fmt='.',label=mylabel,capsize=5,color='royalblue')
         pprof,alphas = ai.log_profile(pressure,list(arc_rads),radii)
+        #rdiff = np.abs(radii - rinasec)
+        #rind  = (rdiff == np.min(rdiff))
+        #r5alp = alphas[rind]
         #import pdb; pdb.set_trace()
         ax.set_xlim((np.min(arc_rads)/3.0,np.max(arc_rads)*3.0))
         ax.set_ylim((np.min(pressure)/5.0,np.max(pressure)*5.0))
@@ -127,8 +132,8 @@ def plot_pres_bins(solns,dataset,outdir,filename,cluster='Zw3146',runits='arcsec
         myup     = np.array([1.177,8.403,5.4905,0.3081,1.0510])
         #myvars = vars2[:-1]
         if len(vars2) < len(myup):
-            myup[1:1+len(vars2)]=vars2
-            #myup[0:len(vars2)]=vars2
+            #myup[1:1+len(vars2)]=vars2
+            myup[0:len(vars2)]=vars2
         else:
             myup = vars2    # If len(pos) > 5, that's OK...we won't use those!
 
@@ -170,7 +175,6 @@ def plot_pres_bins(solns,dataset,outdir,filename,cluster='Zw3146',runits='arcsec
         
     ax.axvline(rin,color=axcol, linestyle ="dashed")      # HWHM
     ax.axvline(rout,color=axcol, linestyle ="dashed")     # Half the FOV
-    ax.axvline(rinasec,color='k', linestyle ="dotted")    # "original" R500
     ax.set_yscale("log")                                  #
     ax.set_xscale("log")                                  #
     
@@ -214,7 +218,7 @@ def plot_pres_bins(solns,dataset,outdir,filename,cluster='Zw3146',runits='arcsec
     if overlay == 'a10':
         #rads = map_vars['d_ang']*bins   # bins should already be in radians
         opm500 = (rfromy,p500,m500)
-        my_a10 = overplot_a10(map_vars,noleg=False,myfs=5,my500=opm500,myax=ax,bare=bare)
+        my_a10 = overplot_a10(map_vars,noleg=False,myfs=5,my500=opm500,myax=ax,bare=bare,geom=geom)
         #import pdb;pdb.set_trace()
         
     if overlay == 'XMM':
@@ -233,9 +237,9 @@ def plot_pres_bins(solns,dataset,outdir,filename,cluster='Zw3146',runits='arcsec
 
 def plot_surface_profs(model,bins,gdata,gcurve,gedge,outdir,filename,cluster='Zw3146',
                        runits='arcseconds',overlay='None',mymodel='NP',pinit=None,
-                       bare=False,slopes=None):
+                       bare=False,slopes=None,geom=[0,0,0,1,1,1,0,0]):
 
-    sz_vars, map_vars, def_bins, Pdl2y, geom = gdi.get_underlying_vars(cluster)
+    sz_vars, map_vars, def_bins, Pdl2y = gdi.get_underlying_vars(cluster)
     pbins=bins
     if mymodel == 'Beta' or mymodel == 'GNFW': pbins = map_vars['thetas']*180.0*3600.0/np.pi
     myfontsize=6    
@@ -251,7 +255,9 @@ def plot_surface_profs(model,bins,gdata,gcurve,gedge,outdir,filename,cluster='Zw
     if slopes is None:
         ldata = [[gdd,gdd] for gdd in gdata]
     else:
-        ldata = [[gdd,gdd-myslope*(ed2-ed1)] for ed1,ed2,gdd,myslope in
+        #ldata = [[gdd,gdd-myslope*(ed2-ed1)] for ed1,ed2,gdd,myslope in
+        #         zip(gedge[:-1],gedge[1:],gdata,slopes)]
+        ldata = [[gdd,gdd*(1.0-myslope*(ed2-ed1))] for ed1,ed2,gdd,myslope in
                  zip(gedge[:-1],gedge[1:],gdata,slopes)]
     ledge = [[ed1,ed2] for ed1,ed2 in zip(gedge[:-1],gedge[1:])]
     lmids = [(ed1+ed2)/2.0 for ed1,ed2 in zip(gedge[:-1],gedge[1:])]
@@ -286,7 +292,7 @@ def plot_correlations(samples,outdir,filename,blobs=None,cluster='Zw3146',mtype=
     myfontsize=6
     plt.figure(2,figsize=(20,12))
     plt.clf()
-    sz_vars, map_vars, bins, Pdl2y, geom = gdi.get_underlying_vars(cluster)
+    sz_vars, map_vars, bins, Pdl2y = gdi.get_underlying_vars(cluster)
 
     pars2plot = samples*1.0
     if domnlvl == False:
@@ -383,7 +389,7 @@ def plot_correlations(samples,outdir,filename,blobs=None,cluster='Zw3146',mtype=
     plt.savefig(fullpath)
     plt.close()
 
-def get_pressure_plot_addons(IntegratedYs,map_vars):
+def get_pressure_plot_addons(IntegratedYs,map_vars,ySph=False):
 
     initR500 = map_vars['r500'].decompose() / map_vars['d_ang']
     thisR500 = initR500.decompose().value * 3600*180 / np.pi  # Now in arcseconds
@@ -392,21 +398,30 @@ def get_pressure_plot_addons(IntegratedYs,map_vars):
     Yints    = np.percentile(Yarr, [16, 50, 84],axis=0)
     yinteg   = Yints[1]       # This is the median...i.e. the best-fit value
 
-    rlow ,m500_l,p500_l = gdi.rMP500_from_y500(Yints[0],map_vars,ySZ=True) # ySZ basically denotes whether the angular distance
-    rmed ,m500_m,p500_m = gdi.rMP500_from_y500(Yints[1],map_vars,ySZ=True) # is already multiplied in or not.
-    rhigh,m500_h,p500_h = gdi.rMP500_from_y500(Yints[2],map_vars,ySZ=True)
+    rlow ,m500_l,p500_l,msys_l = gdi.rMP500_from_y500(Yints[0],map_vars,ySZ=True,ySph=ySph) # ySZ basically denotes whether the angular distance
+    rmed ,m500_m,p500_m,msys_m = gdi.rMP500_from_y500(Yints[1],map_vars,ySZ=True,ySph=ySph) # is already multiplied in or not.
+    rhigh,m500_h,p500_h,msys_h = gdi.rMP500_from_y500(Yints[2],map_vars,ySZ=True,ySph=ySph)
+
+    fb   = 0.9**((3.0*1.78+1.0)/(3.0*1.78))  # calibration factor, and how it feeds into Y-M uncertainty
+    
+    rcal,m5ca_l,p5ca_l,msyc_l = gdi.rMP500_from_y500(Yints[1]*fb,map_vars,ySZ=True,ySph=ySph)
+    rcal,m5ca_h,p5ca_h,msyc_h = gdi.rMP500_from_y500(Yints[1]/fb,map_vars,ySZ=True,ySph=ySph)
 
     rinasec   = rmed * u.rad.to('arcsec')
     r500Mpc   = rmed * map_vars['d_ang'].to('Mpc')
 
     rlas,rhas  = rlow * u.rad.to('arcsec'), rhigh * u.rad.to('arcsec')
 
+    #import pdb;pdb.set_trace()
+    
     m5errs = np.array([m500_m.value-m500_l.value,m500_h.value-m500_m.value])
-    m5_pm   = pos_neg_formatter(m500_m.value,m5errs[1],m5errs[0])
+    m5cale = np.array([m500_m.value-m5ca_l.value,m5ca_h.value-m500_m.value])
+    m5_pm   = pos_neg_formatter(m500_m.value,m5errs[1],m5errs[0],sys=msys_m.value,cal=m5cale)
+    #m5_pm   = pos_neg_formatter(m500_m.value,m5errs[1],m5errs[0])
 
     return rmed,rinasec,m5_pm,thisR500,rlas,rhas,r500Mpc,m500_m,p500_m
 
-def pos_neg_formatter(med,high_err,low_err):
+def pos_neg_formatter(med,high_err,low_err,sys=None,cal=None):
     """
     Input the median (or mode), and the *error bars* (not percentile values, but the
     distance between the +/-1 sigma percentiles and the 0 sigma percentile).
@@ -431,7 +446,17 @@ def pos_neg_formatter(med,high_err,low_err):
     hsStr = '+'+"{:.2F}".format(hsig)
     lsStr = "{:.2F}".format(-lsig)
 
-    baStr = r'${0}^{{{1}}}_{{{2}}}$'. format(msStr,hsStr,lsStr)
+    baStr = r'${0}^{{{1}}}_{{{2}}}$'.format(msStr,hsStr,lsStr)
+
+    if not (sys is None):
+        hyStr = '+'+"{:.2F}".format(sys/myexp)
+        lyStr = "{:.2F}".format(-sys/myexp)
+        baStr = baStr + r' $^{{{0}}}_{{{1}}}$'.format(hyStr,lyStr)
+    if not (sys is None):
+        hyStr = '+'+"{:.2F}".format(cal[1]/myexp)
+        lyStr = "{:.2F}".format(-cal[0]/myexp)
+        baStr = baStr + r' $^{{{0}}}_{{{1}}}$'.format(hyStr,lyStr)
+    
     exStr = 'E'+pStr
     coStr = baStr+exStr
 
@@ -485,7 +510,7 @@ def overplot_XMM(myax=None,noleg=False,myfs=5):
         myax.legend(fontsize=myfs)
 
     
-def overplot_a10(map_vars,noleg=False,myfs=5,my500=(None,None,None),myax=None,bare=False): 
+def overplot_a10(map_vars,noleg=False,myfs=5,my500=(None,None,None),myax=None,bare=False,geom=[0,0,0,1,1,1,0,0]): 
 
     radnx   = np.array([1.0,300.0]) * (u.arcsec).to('rad')
     #if type(ax) != type(None):
@@ -519,7 +544,7 @@ def overplot_a10(map_vars,noleg=False,myfs=5,my500=(None,None,None),myax=None,ba
         unitless_profile = (unit_a10*Pdl2y).decompose().value
         
         yProf = ni.int_profile(oprads, unitless_profile, oprads)
-        yint ,newr500=PLB.Y_SZ_via_scaling(yProf,oprads,map_vars['r500'],map_vars['d_ang']) # As of Aug. 31, 2018
+        yint ,newr500=PLB.Y_SZ_via_scaling(yProf,oprads,map_vars['r500'],map_vars['d_ang'],geom) # As of Aug. 31, 2018
         #print newr500,(map_vars['r500']/map_vars['d_ang']).decompose()
         #import pdb;pdb.set_trace()
 
@@ -681,3 +706,49 @@ def plot_autocorrs(sampler,outdir,filename,burn_in=200):
     plt.savefig(fullpath)
     #plt.close(stepmap)
     plt.close()
+
+def plot_surface_profs_v2(idlvals,idlrads,gdata,gcurve,gedge,outdir,filename,cluster='Zw3146',
+                          runits='arcseconds',overlay='None',mymodel='NP',pinit=None,
+                          bare=False,slopes=None):
+
+    sz_vars, map_vars, def_bins, Pdl2y = gdi.get_underlying_vars(cluster)
+    myfontsize=6    
+    myfig = plt.figure(1,figsize=(7,5),dpi=300)
+    plt.clf()
+    ax = myfig.add_subplot(111)
+    mult = 1.0e6  # Multiply almost everything by this to be in microK
+    
+    cov   = np.linalg.inv(gcurve)
+    myrms = np.sqrt(np.diag(cov))* mult
+
+
+    if slopes is None:
+        ldata = [[gdd,gdd] for gdd in gdata]
+    else:
+        ldata = [[gdd,gdd-myslope*(ed2-ed1)] for ed1,ed2,gdd,myslope in
+                 zip(gedge[:-1],gedge[1:],gdata,slopes)]
+    ledge = [[ed1,ed2] for ed1,ed2 in zip(gedge[:-1],gedge[1:])]
+    lmids = [(ed1+ed2)/2.0 for ed1,ed2 in zip(gedge[:-1],gedge[1:])]
+    pedge = np.asarray(ledge); pedge=pedge.flatten() 
+    pdata = np.asarray(ldata); pdata=pdata.flatten()* mult
+    pmids = np.asarray(lmids); pmids=pmids.flatten()
+    
+    #import pdb;pdb.set_trace()
+    ax.plot(pedge, pdata, color='b',label='Minkasi Rings')
+    if slopes is None:
+        ax.errorbar(pmids,pdata[::2],yerr=myrms,fmt='.',color='c',capsize=5)
+    else:
+        ax.errorbar(pedge[::2],pdata[::2],yerr=myrms,fmt='.',color='c',capsize=5)
+        
+    if bare == False: ax.plot(idlrads, idlvals*mult, color='r',label='IDL SB profile')
+    ax.set_ylabel(r"Brightness ($\mu$K)",fontsize=myfontsize*2)
+    ax.set_xlabel("Radius ("+runits+")",fontsize=myfontsize*2)
+
+    if type(pinit) != type(None) and bare == False:
+        linit = [[pi,pi] for pi in pinit]
+        ppin = np.asarray(linit); ppin=ppin.flatten()* mult
+        ax.plot(pedge,ppin,color='k',label='Initial Estimate')
+    
+    fullpath = os.path.join(outdir,filename)
+    plt.legend()
+    plt.savefig(fullpath)

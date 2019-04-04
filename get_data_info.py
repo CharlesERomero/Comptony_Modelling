@@ -6,7 +6,9 @@ import kSZ_spectrum as ksz
 import astropy.units as u
 import astropy.constants as const
 import scipy.constants as spconst
-from astropy.cosmology import Planck15 as cosmo
+#from astropy.cosmology import Planck15 as cosmo
+from astropy.cosmology import FlatLambdaCDM
+cosmo = FlatLambdaCDM(H0=70.0, Om0=0.3, Tcmb0=2.725)
 import numerical_integration as ni
 from astropy.coordinates import Angle #
 
@@ -573,7 +575,7 @@ def get_SZ_vars(temp=5.0,instrument='MUSTANG2',units='Kelvin',cluster='Zw3146'):
 
     return sz_vars
 
-def get_map_vars(cluster_priors,instrument='MUSTANG2'):
+def get_map_vars(cluster_priors,instrument='MUSTANG2',ySph=False):
 
     m500   = cluster_priors.M_500 * u.M_sun
     z      = cluster_priors.z
@@ -597,7 +599,7 @@ def get_map_vars(cluster_priors,instrument='MUSTANG2'):
               "racen":cluster_priors.ra.to('deg'),"deccen":cluster_priors.dec.to('deg'),
               "y500s":np.zeros(nb_theta_range),"nrbins":nb_theta_range}
 
-    arrys,arrms,arrps = yMP500_from_r500(thetas,map_vars,ySZ=True)
+    arrys,arrms,arrps = yMP500_from_r500(thetas,map_vars,ySZ=True,ySph=ySph)
     map_vars["y500s"] = arrys
     
     return map_vars
@@ -626,7 +628,7 @@ def get_cosmo():
 
     return cosmo
 
-def get_underlying_vars(cluster='Zw3146',instrument='MUSTANG2',units='Kelvin'):
+def get_underlying_vars(cluster='Zw3146',instrument='MUSTANG2',units='Kelvin',ySph=False):
 
     ### Some cluster-dependent variables:
     if cluster == 'Zw3146':
@@ -653,6 +655,10 @@ def get_underlying_vars(cluster='Zw3146',instrument='MUSTANG2',units='Kelvin'):
         my_priors  = moo_1110_priors()
     if cluster == 'MOO_1142':
         my_priors  = moo_1142_priors()
+    if cluster == 'MACS0717':
+        my_priors  = macs0717_priors()
+    if cluster == 'MACS1149':
+        my_priors  = macs1149_priors()
         
     m500       = my_priors.M_500 * u.M_sun
     z          = my_priors.z
@@ -660,17 +666,18 @@ def get_underlying_vars(cluster='Zw3146',instrument='MUSTANG2',units='Kelvin'):
     #deccen = rxj1347_priors.dec.to('deg')
     ### Some fitting variables:
     beamvolume=138.0 # in arcsec^2
-    #nbins     = 6    # It's just a good number...so good, you could call it a perfect number.
+    nbins     = 6    # It's just a good number...so good, you could call it a perfect number.
     #nbins     = 18    # It's just a good number...so good, you could call it a perfect number.
-    nbins     = 12    # It's just a good number...so good, you could call it a perfect number.
-    #radminmax = np.array([10.0,4.25*60.0])*(u.arcsec).to('rad')
-    radminmax = np.array([5.0,5.0*60.0])*(u.arcsec).to('rad')
+    #nbins     = 12    # It's just a good number...so good, you could call it a perfect number.
+    radminmax = np.array([10.0,4.25*60.0])*(u.arcsec).to('rad')
+    #radminmax = np.array([5.0,5.0*60.0])*(u.arcsec).to('rad')
 
     ##############
     bins      = np.logspace(np.log10(radminmax[0]),np.log10(radminmax[1]), nbins) 
     #geom     = [X_shift, Y_shift, Rotation, Ella*, Ellb*, Ellc*, Xi*, Opening Angle]
-    geom      = [0,0,0,1,1,1,0,0] # This gives spherical geometry
-    map_vars  = get_map_vars(my_priors, instrument='MUSTANG2')
+    #geom      = [0,0,0,1,1,1,0,0] if mygeom is None else mygeom
+    #geom      = [0,0,0.8,1,0.8,0.8944272,0,0] # Assumed ellipsoid...    
+    map_vars  = get_map_vars(my_priors, instrument='MUSTANG2',ySph=ySph)
     alphas    = np.zeros(nbins) #??
     d_ang     = get_d_ang(z)
     #binskpc   = bins * d_ang
@@ -678,7 +685,7 @@ def get_underlying_vars(cluster='Zw3146',instrument='MUSTANG2',units='Kelvin'):
     sz_vars   = get_SZ_vars(temp=my_priors.Tx,cluster=cluster,units=units)
     Pdl2y     = (szcu['thom_cross']*d_ang/szcu['m_e_c2']).to("cm**3 keV**-1")
 
-    return sz_vars, map_vars, bins, Pdl2y, geom
+    return sz_vars, map_vars, bins, Pdl2y
 
 class rxj1347_priors:
         
@@ -865,6 +872,28 @@ class jkcs041_priors:
         self.Tx    = 3.0                     # keV
         self.name  = 'jkcs041'
 
+class macs0717_priors:
+        
+    def __init__(self):
+             
+        self.z     = 0.55                    # Redshift
+        self.ra    = Angle('109.39368459d')  # Right Ascencion, in hours
+        self.dec   = Angle('37.74642846d')   # Declination, in degrees
+        self.M_500 = 2.5e15                  # Solar masses
+        self.Tx    = 10.0                     # keV
+        self.name  = 'macs0717'
+
+class macs1149_priors:
+        
+    def __init__(self):
+             
+        self.z     = 0.54                    # Redshift
+        self.ra    = Angle('177.50025944d')  # Right Ascencion, in hours
+        self.dec   = Angle('22.35894813d')   # Declination, in degrees
+        self.M_500 = 1.9e15                  # Solar masses
+        self.Tx    = 7.0                     # keV
+        self.name  = 'macs1149'
+
 ### Copied from gNFW_profiles.py:
 
 def a10_from_m500_z(m500, z,rads):
@@ -981,7 +1010,7 @@ def Y_sphere(myprof, radii, Rmax, d_ang = 0, z=1.99):
     return Ysphere
 
 
-def yMP500_from_r500(radian500,map_vars,ySZ=True):
+def yMP500_from_r500(radian500,map_vars,ySZ=True,ySph=False):
 
     h = cosmo.H(map_vars['z'])/cosmo.H(0)
     d_a = map_vars['d_ang'].to('Mpc').value
@@ -993,6 +1022,9 @@ def yMP500_from_r500(radian500,map_vars,ySZ=True):
     Jofx    = 0.7398
     YMscale = 1.78
 
+    if ySph:
+        #ySZ  = False
+        Jofx = 0.6145  # Actually I(x) in A10, but, it plays the same role, so use this variable
     ### So, when I do my initial Y500 calculation, it's just Y_SZ (without D_A**2, h(z)**-2/3).
     ### In this case, "yinteg" is Y_SZ, so set ySZ = True. However, when I come from the end of
     ### the MCMC run, then I've included these factors and thus ySZ = False.
@@ -1022,7 +1054,7 @@ def yMP500_from_r500(radian500,map_vars,ySZ=True):
 
     return Y500, m500, P500
 
-def rMP500_from_y500(yinteg,map_vars,ySZ=True):
+def rMP500_from_y500(yinteg,map_vars,ySZ=True,ySph=False):
     """
     Provide h and d_a as scalars:
 
@@ -1042,6 +1074,10 @@ def rMP500_from_y500(yinteg,map_vars,ySZ=True):
     Jofx    = 0.7398
     YMscale = 1.78
 
+    ### If calculating for ySph, then it's definitely not going to make use of Y_cyl (Y_SZ)
+    if ySph:
+        #ySZ  = False
+        Jofx = 0.6145  # Actually I(x) in A10, but, it plays the same role, so use this variable
     ### So, when I do my initial Y500 calculation, it's just Y_SZ (without D_A**2, h(z)**-2/3).
     ### In this case, "yinteg" is Y_SZ, so set ySZ = True. However, when I come from the end of
     ### the MCMC run, then I've included these factors and thus ySZ = False.
@@ -1063,7 +1099,17 @@ def rMP500_from_y500(yinteg,map_vars,ySZ=True):
         M500_i * h70)/ ((3*10**14) * const.M_sun)
         )**(2./3) * h70**2 * u.keV / u.cm**3
 
-    return r500, M500_i, P500
+    lny  = np.log(lside)
+    t1   = ((lny -1.0)/YMscale )*0.024
+    t2   = ((Bofx - lny)/YMscale**2)*0.06
+    xer  = np.sqrt(t1**2 + t2**2)
+    #msys = xer * 3e14 * u.Msun / h70    # Systematic Mass error (due to Y-M)
+    msys = xer * M500_i
+
+    #print(t1,t2,msys)
+    #import pdb;pdb.set_trace()
+    
+    return r500, M500_i, P500, msys
 
 def get_bv_from_Jy2K(Jy2K,instrument):
 
