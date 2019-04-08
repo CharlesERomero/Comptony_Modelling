@@ -66,7 +66,8 @@ def load_rings(option='M2',cluster='Zw3146',session=0,iteration=0):
                 #midstr='_CSlopeBeam_10p7_8srcs_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'
                 #########################################################################################################
                 # Spherical model
-                midstr='_CSlopeBeam_10p7_6srcs_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'  # I think my best one so far...?
+                #midstr='_CSlopeBeam_10p7_6srcs_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'  # I think my best one so far...?
+                midstr='_CSlopeBeam_10p7_2019-04-06_6_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'
                 #########################################################################################################
                 #midstr='_CSlopeBeam_10p7_ellipt_6_TS_v0_51_Jan24_PdoCals_svd10_rfwhm_pass_'
                 #geom      = [0,0,0.8,1,0.8,0.8944272,0,0]  # If elliptical
@@ -368,7 +369,7 @@ def make_model_map(pos,ppbins,edges,map_vars,mapshape,inst='MUSTANG2',mytype='NP
     
     return mymap.ravel()
 
-def loop_fit_profs(dataset='M2',version='-SVD10_Apr3_ySph_CSB_6srcs_sph-',cluster='Zw3146',model='NP',domnlvl=True,doemcee=False,session=0,
+def loop_fit_profs(dataset='M2',version='-SVD10_Apr8_ySph_CSB_6srcs_sph-',cluster='Zw3146',model='NP',domnlvl=True,doemcee=False,session=0,
                    nslice=0,ring_combine=False,slope=True,slices=False,npass=10,nsession=0,sstart=0,istart=1,ySph=False,
                    longrun=False,rfwhm=10.7):
 
@@ -379,9 +380,34 @@ def loop_fit_profs(dataset='M2',version='-SVD10_Apr3_ySph_CSB_6srcs_sph-',cluste
                               iteration=kk,ySph=ySph,longrun=longrun,rfwhm=rfwhm)
 
 
-def fit_prof_to_rings(dataset='M2',version='-Mar29_rfwhm_6srcs_ell-',cluster='Zw3146',model='NP',domnlvl=True,doemcee=False,session=0,
+def fit_prof_to_rings(dataset='M2',version='-Apr8_rfwhm_6srcs_ell-',cluster='Zw3146',model='NP',domnlvl=True,doemcee=False,session=0,
                       nslice=8,slicenum=0,ring_combine=False,slope=True,slices=False,fpause=True,makemap=True,iteration=1,ySph=False,
                       longrun=False,rfwhm=10.7):
+
+    """
+    Purpose: This is the workhorse module for fitting pressure profiles to surface brightness profiles AND producing ancillary high-level products/results.
+
+    Inputs:
+    ---> dataset:  A string that defines which instrument the data comes from. For now, we really only use MUSTANG-2 ('M2') data.
+    ---> version:  A string that identifies parameters used in your fitting procedure.
+    ---> cluster:  A string that identifies the galaxy cluster for which the data pertains. This finds necessary priors (redshift and electron temperature) that are necessary for determining pressure profiles.
+    ---> model:    Either of: "NP", for Non-parametric, "GNFW" for Generalized NFW, or "BETA" for a beta profile.
+    ---> domnlvl:  Do you want to fit for a mean level? (In general, you should)
+    ---> doemcee:  Use emcee or a custom (single chain) MCMC?
+    ---> session:  If you are looking to load rings from different observation sessions (nights), you can set this keyword to the appropriate number (only used if this is greater than 0).
+    ---> nslice:   Number of slices used if you have rings by the slice.
+    ---> slicenum: So to something greater than 0 if you are analyzing sliced profiles.
+    ---> ring_combine: If you want to combine slices and fit them as if they were complete rings, set this to True.
+    ---> slope:    Do the annuli use slopes? (Nowadays the default is Yes, i.e. True)
+    ---> fpause:   Force pause? Good if you want to check things, but if looping, better to not have pauses.
+    ---> makemap:  Map a residual map (and add models as other extensions). Good to do - can check and use for other things.
+    ---> iteration: The iteration that you want to analyze.
+    ---> ySph:     Do you want to use yCyl or ySph? The difference appears to be negligible.
+    ---> longrun:  The default length usually converges, but the "burn in" may not be quite long enough. Use longrun to ensure convergence / good parameter covariances.
+    ---> rfwhm:    Restricted FWHM: If the point sources have a FWHM < rfwhm, then use rfwhm instead. This is used because sometimes Minkasi fits a beam that is ~< 8", but we know that M2 has a broader beam than that - especially over all nights.
+
+
+    """
 
     version = model+version
     ### You might want "_Iter" to be "_Session" depending on what you are actually doing...
@@ -437,8 +463,8 @@ def fit_prof_to_rings(dataset='M2',version='-Mar29_rfwhm_6srcs_ell-',cluster='Zw
         #import pdb;pdb.set_trace()
     
     ndim = len(pos); nsteps = 100000/nchain
-    #if model == 'GNFW':
-    #    nsteps /= 4
+    if model == 'GNFW':
+        nsteps /= 4
     if longrun:
         nsteps*= 3
         version = version+'_long'
@@ -523,7 +549,8 @@ def fit_prof_to_rings(dataset='M2',version='-Mar29_rfwhm_6srcs_ell-',cluster='Zw
 
     if makemap:
         ptamps = get_data_cov_edges(curve,deriv,edges,trim=trim,slices=slices,nslice=nslice,slicenum=slicenum,
-                                                    nsrc=6,fpause=fpause,ptsrcamps=True)
+                                                    nsrc=nsrc,fpause=fpause,ptsrcamps=True)
+        print(ptamps)
         make_fits_from_fits(cluster,pos=mybest,ppbins=bins,edges=gedge,version=version,dataset=dataset,
                             inst='MUSTANG2',mytype=model,ptamps=ptamps,iteration=iteration,rfwhm=rfwhm,geom=geom)
     
@@ -1260,8 +1287,10 @@ def make_ptsrc_map(cluster,ptamps,xymap,header,gpfile=None,pixs=2.0,rfwhm=0.0):
     sigma    = gps[6::4] * 180.0 / np.pi * 3600.0
     sig2fwhm = np.sqrt(8.0*np.log(2))
     fwhm     = sigma*sig2fwhm
-    if rfwhm > 0:
-        sigma = np.ones(len(sigma))*rfwhm/sig2fwhm
+    for j,myfwhm in enumerate(fwhm):
+        if rfwhm > myfwhm:
+            sigma[j] = rfwhm/sig2fwhm
+        #sigma = np.ones(len(sigma))*rfwhm/sig2fwhm
     #print(fwhm)
     
     #amp    = gps[3::4]
@@ -1354,7 +1383,7 @@ def just_print_soln(dataset='M2',version='-Mar14_v2-',cluster='Zw3146',model='NP
                                                     nsrc=6,fpause=False,ptsrcamps=True)
         print(gdata)
     
-def map_minus_rings(dataset='M2',version='-Apr_EllRings_5c-',cluster='Zw3146',model='NP',domnlvl=False,doemcee=False,session=0,
+def map_minus_rings(dataset='M2',version='-Apr_SphRings_5c-',cluster='Zw3146',model='NP',domnlvl=False,doemcee=False,session=0,
                     nslice=8,slicenum=0,ring_combine=False,slope=False,slices=False,fpause=False,makemap=True,iteration=1,
                     ptamps=None,fwhm=10.7,pixsize=2.0,rfwhm=0.0):
 
@@ -1433,7 +1462,7 @@ def map_minus_rings(dataset='M2',version='-Apr_EllRings_5c-',cluster='Zw3146',mo
         ptmap  = ptmap.reshape(inmap.shape)
         #import pdb;pdb.set_trace()
         
-    #mnlvl=pos[-1] if domnlvl else 0.0
+    #mnlvl=mymnlvl if domnlvl else 0.0
     #print mnlvl
     
     modelmap  = modelmap.reshape(inmap.shape)
@@ -1445,9 +1474,12 @@ def map_minus_rings(dataset='M2',version='-Apr_EllRings_5c-',cluster='Zw3146',mo
     prename = dataset+'_'+cluster+'_'+version+'_'
 
     fullpath = outdir+prename+'DataMinusRings.fits'
-    myhdu = make_hdu(modelmap,inhdr,ptmap=ptmap,datamap=inmap,rmsmap=rmsmap,cluster=cluster,mnlvl=mnlvl,
+    myhdu = make_hdu(modelmap,inhdr,ptmap=ptmap,datamap=inmap,rmsmap=rmsmap,cluster=cluster,mnlvl=mymnlvl,
                      smooth=10.0,fullpath=fullpath,geom=geom)
 
+    if fpause:
+        import pdb; pdb.set_trace()
+        
 def gpfile_by_clus(cluster):
 
     if cluster == 'Zw3146':

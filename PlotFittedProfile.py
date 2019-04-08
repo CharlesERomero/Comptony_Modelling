@@ -449,8 +449,12 @@ def pos_neg_formatter(med,high_err,low_err,sys=None,cal=None):
     baStr = r'${0}^{{{1}}}_{{{2}}}$'.format(msStr,hsStr,lsStr)
 
     if not (sys is None):
-        hyStr = '+'+"{:.2F}".format(sys/myexp)
-        lyStr = "{:.2F}".format(-sys/myexp)
+        myma  = (10**sys - 1) * med
+        mymb  = (10**(-sys) - 1) * med
+        hyStr = '+'+"{:.2F}".format(myma/myexp)
+        lyStr = "{:.2F}".format(mymb/myexp)
+        #hyStr = '+'+"{:.2F}".format(sys/myexp)
+        #lyStr = "{:.2F}".format(-sys/myexp)
         baStr = baStr + r' $^{{{0}}}_{{{1}}}$'.format(hyStr,lyStr)
     if not (sys is None):
         hyStr = '+'+"{:.2F}".format(cal[1]/myexp)

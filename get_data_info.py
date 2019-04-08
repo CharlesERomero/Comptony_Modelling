@@ -1099,13 +1099,17 @@ def rMP500_from_y500(yinteg,map_vars,ySZ=True,ySph=False):
         M500_i * h70)/ ((3*10**14) * const.M_sun)
         )**(2./3) * h70**2 * u.keV / u.cm**3
 
-    lny  = np.log(lside)
-    t1   = ((lny -1.0)/YMscale )*0.024
-    t2   = ((Bofx - lny)/YMscale**2)*0.06
+    #lny  = np.log(lside)
+    #t1   = ((lny -1.0)/YMscale )*0.024
+    #t2   = ((Bofx - lny)/YMscale**2)*0.08
+    logy  = np.log10(lside)
+    t1   = ((logy - 1)/YMscale )*0.024
+    t2   = ((Bofx - logy)/YMscale**2)*0.08
     xer  = np.sqrt(t1**2 + t2**2)
     #msys = xer * 3e14 * u.Msun / h70    # Systematic Mass error (due to Y-M)
-    msys = xer * M500_i
-
+    #msys = xer * M500_i
+    msys = xer
+    
     #print(t1,t2,msys)
     #import pdb;pdb.set_trace()
     
